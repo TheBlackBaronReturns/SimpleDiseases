@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.theblackbaron.simplediseases.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "simplediseases.refmap.json",
+  "mixins": [],
+  "client": [
+    "EffectRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

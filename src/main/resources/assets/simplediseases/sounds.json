@@ -1,0 +1,26 @@
+{
+  "cough": {
+    "subtitle": "subtitles.simplediseases.cough",
+    "sounds": [ "simplediseases:cough" ]
+  },
+  "sneeze": {
+    "subtitle": "subtitles.simplediseases.sneeze",
+    "sounds": [ "simplediseases:sneeze" ]
+  },
+  "vomit": {
+    "subtitle": "subtitles.simplediseases.vomit",
+    "sounds": [ "simplediseases:vomit" ]
+  },
+  "diarrhea": {
+    "subtitle": "subtitles.simplediseases.diarrhea",
+    "sounds": [ "simplediseases:diarrhea" ]
+  },
+  "shortness_of_breath": {
+    "subtitle": "subtitles.simplediseases.shortness_of_breath",
+    "sounds": [ "simplediseases:shortness_of_breath" ]
+  },
+  "stomach_cramps": {
+    "subtitle": "subtitles.simplediseases.stomach_cramps",
+    "sounds": [ "simplediseases:stomach_cramps" ]
+  }
+}
