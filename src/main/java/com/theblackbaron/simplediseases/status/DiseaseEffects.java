@@ -300,6 +300,26 @@ public class DiseaseEffects {
         return false;
     }
 
+    /** True when JEED should show the fever line for this effect on the given entity. */
+    public static boolean shouldShowFeverTooltip(LivingEntity entity, DiseaseMobEffect effect) {
+        if (effect.getFeverOffset() <= 0.0) return false;
+        if (entity == null) return true;
+        if (hasSepticShock(entity)) return false;
+
+        double maxOffset = 0.0;
+        DiseaseMobEffect winner = null;
+        for (net.minecraft.world.effect.MobEffectInstance inst : entity.getActiveEffects()) {
+            if (inst.getEffect() instanceof DiseaseMobEffect dme) {
+                double offset = dme.getFeverOffset();
+                if (offset > maxOffset) {
+                    maxOffset = offset;
+                    winner = dme;
+                }
+            }
+        }
+        return effect == winner;
+    }
+
     private static boolean hasModerateOrWorsePneumonia(LivingEntity e) {
         for (EnumMap<Severity, RegistryObject<MobEffect>> byTier : PNEUMONIA_VARIANTS.values()) {
             for (Map.Entry<Severity, RegistryObject<MobEffect>> entry : byTier.entrySet()) {

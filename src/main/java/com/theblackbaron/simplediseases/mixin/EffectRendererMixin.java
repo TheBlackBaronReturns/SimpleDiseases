@@ -1,7 +1,9 @@
 package com.theblackbaron.simplediseases.mixin;
 
+import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
 import net.mehvahdjukaar.jeed.common.EffectRenderer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.world.effect.MobEffect;
@@ -23,8 +25,8 @@ public abstract class EffectRendererMixin {
             CallbackInfoReturnable<List<Component>> cir) {
         MobEffect effect = instance.getEffect();
         if (!(effect instanceof DiseaseMobEffect dme)) return;
+        if (!DiseaseEffects.shouldShowFeverTooltip(Minecraft.getInstance().player, dme)) return;
         double feverOffset = dme.getFeverOffset();
-        if (feverOffset <= 0.0) return;
 
         String langKey = feverOffset >= DiseaseMobEffect.FEVER_SEVERE ? "simplediseases.fever.severe" :
                          feverOffset >= DiseaseMobEffect.FEVER_HIGH   ? "simplediseases.fever.high" :
