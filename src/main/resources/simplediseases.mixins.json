@@ -6,7 +6,8 @@
   "refmap": "simplediseases.refmap.json",
   "mixins": [],
   "client": [
-    "EffectRendererMixin"
+    "EffectRendererMixin",
+    "LivingEntityRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

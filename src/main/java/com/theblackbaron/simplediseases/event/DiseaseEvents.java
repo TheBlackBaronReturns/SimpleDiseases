@@ -242,14 +242,12 @@ public class DiseaseEvents {
             tickExistingDiseases(state, ctx, true);
             tickPotentialComplications(player, state, ctx);
 
-            if (DiseaseEffects.hasSepticShock(player)) {
-                ColdSweatCompat.applySepticShock(player);
-            }
-
             if (active != null && state.inRecovery(active) && DiseaseRegistry.get(active) instanceof ViralDiseaseDef v) {
                 DiseaseParticleEmitter.tick(player, v.particle().get());
             }
         }
+
+        ColdSweatCompat.syncSepticShockModifier(player);
 
         contagionManager.tick(player, state);
 

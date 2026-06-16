@@ -21,7 +21,7 @@ public class DiseaseMobEffect extends MobEffect {
     public static final double FEVER_HIGH   = 15.0;
     public static final double FEVER_SEVERE = 20.0;
 
-    /** Target CS BODY temperature magnitude for septic shock — player is pushed toward -SEPTIC_SHOCK_STRENGTH. */
+    /** CS BASE-trait temperature penalty for septic shock (subtracted from BASE; not a BODY setpoint). */
     public static final double SEPTIC_SHOCK_STRENGTH = 55.0;
 
     private double feverOffset = 0.0;
@@ -56,7 +56,7 @@ public class DiseaseMobEffect extends MobEffect {
         return feverOffset;
     }
 
-    /** Sets the septic shock strength — CS BODY is pushed toward -shockOffset each tick; chainable. */
+    /** Sets the septic shock BASE penalty in CS body units; chainable. Applied via {@link com.theblackbaron.simplediseases.compat.SepticShockTempModifier}. */
     public DiseaseMobEffect shock(double offset) {
         this.shockOffset = offset;
         return this;

@@ -1,8 +1,12 @@
 package com.theblackbaron.simplediseases.compat;
 
+import com.momosoftworks.coldsweat.api.event.core.registry.TempModifierRegisterEvent;
 import com.momosoftworks.coldsweat.api.util.Temperature;
+import com.momosoftworks.coldsweat.api.util.placement.Matcher;
+import com.momosoftworks.coldsweat.api.util.placement.Placement;
 import com.momosoftworks.coldsweat.util.world.WorldHelper;
-import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
+import com.theblackbaron.simplediseases.SimpleDiseases;
+import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,6 +15,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -167,24 +172,31 @@ public class ColdSweatCompat {
         return getWorldTemp(player) + blockLight / 15.0 > threshold / 50.0;
     }
 
-    // Septic shock pushes CS BODY toward -SEPTIC_SHOCK_STRENGTH at this rate per tick.
-    // At 1.0/tick a plains player (BODY ≈ 0) reaches -55 in ~55 ticks (≈3 seconds).
-    private static final double SEPTIC_SHOCK_RATE = 1.0;
+    // Septic shock applies a BASE-trait TempModifier penalty (see SepticShockTempModifier).
+    private static final ResourceLocation SEPTIC_SHOCK_MODIFIER_ID =
+            new ResourceLocation(SimpleDiseases.MOD_ID, "septic_shock");
 
     /**
-     * Pushes the player's CS BODY temperature toward -SEPTIC_SHOCK_STRENGTH each tick,
-     * simulating distributive vasodilation and cooling in septic shock. At SEPTIC_SHOCK_RATE
-     * units/tick a plains player reaches near-hypothermia in ~55 ticks (≈3 seconds).
+     * Ensures the septic-shock BASE penalty modifier is present while shock is active and removed
+     * when cured. The modifier subtracts {@link DiseaseMobEffect#getShockOffset()} from BASE each
+     * recalc so CORE thermodynamics (environment, insulation, heat) still move BODY freely.
      * No-op without Cold Sweat.
      */
-    public static void applySepticShock(ServerPlayer player) {
+    public static void syncSepticShockModifier(ServerPlayer player) {
         if (!LOADED) return;
-        double current = Temperature.get(player, Temperature.Trait.BODY);
-        double target  = -DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH;
-        if (current > target) {
-            Temperature.add(player, Temperature.Trait.CORE,
-                    Math.max(target - current, -SEPTIC_SHOCK_RATE));
+        boolean inShock = DiseaseEffects.hasSepticShock(player);
+        boolean hasMod = Temperature.hasModifier(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
+        if (inShock && !hasMod) {
+            Temperature.addModifier(player, new SepticShockTempModifier(), Temperature.Trait.BASE,
+                    Placement.LAST.noDuplicates(Matcher.SAME_CLASS));
+        } else if (!inShock && hasMod) {
+            Temperature.removeModifiers(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
         }
+    }
+
+    @SubscribeEvent
+    public static void onTempModifierRegister(TempModifierRegisterEvent event) {
+        event.register(SEPTIC_SHOCK_MODIFIER_ID, SepticShockTempModifier::new);
     }
 
     // Bacterial recovery uses a fraction of the disease's fever offset as the warmth gate,

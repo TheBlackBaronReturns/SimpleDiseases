@@ -1,6 +1,7 @@
 package com.theblackbaron.simplediseases;
 
 import com.theblackbaron.simplediseases.command.SdCommands;
+import com.theblackbaron.simplediseases.compat.ColdSweatCompat;
 import com.theblackbaron.simplediseases.event.CureEvents;
 import com.theblackbaron.simplediseases.event.DiseaseEvents;
 import com.theblackbaron.simplediseases.event.SymptomEvents;
@@ -38,5 +39,6 @@ public class SimpleDiseases {
                 events.getDebugViralPlayers(), events.getDebugBacterialPlayers()));
         MinecraftForge.EVENT_BUS.register(new CureEvents(events.getContagionManager()));
         MinecraftForge.EVENT_BUS.register(new SymptomEvents());
+        MinecraftForge.EVENT_BUS.register(ColdSweatCompat.class);
     }
 }
