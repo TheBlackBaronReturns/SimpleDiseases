@@ -102,7 +102,7 @@ public final class ComplicationCategory implements DiseaseCategory {
     private void tickBacterialPreLatch(ComplicationDiseaseDef cdef, ProgressComponent prog,
                                         SymptomPoolComponent pool, SourceComponent src, TierComponent tier,
                                         ServerPlayer player, PlayerDiseaseState state, DiseaseInstance instance) {
-        ResourceLocation sourceId = new ResourceLocation(SimpleDiseases.MOD_ID, cdef.triggeredBy().get());
+        ResourceLocation sourceId = cdef.triggeredById().get();
         boolean gateOpen = isBacterialGateActive(sourceId, state);
         if (gateOpen) {
             if (!src.hasSource()) src.sourceId = sourceId;
@@ -378,8 +378,8 @@ public final class ComplicationCategory implements DiseaseCategory {
     public static ComplicationDiseaseDef qualifyingBacterialComplication(PlayerDiseaseState state) {
         for (DiseaseDef def : DiseaseRegistry.complications()) {
             if (!(def instanceof ComplicationDiseaseDef cdef)) continue;
-            if (cdef.triggeredBy().isEmpty()) continue;
-            ResourceLocation sourceId = new ResourceLocation(SimpleDiseases.MOD_ID, cdef.triggeredBy().get());
+            if (cdef.triggeredById().isEmpty()) continue;
+            ResourceLocation sourceId = cdef.triggeredById().get();
             if (!(DiseaseRegistry.get(sourceId) instanceof BacterialDiseaseDef)) continue;
             if (isBacterialGateActive(sourceId, state)) return cdef;
         }
@@ -394,8 +394,8 @@ public final class ComplicationCategory implements DiseaseCategory {
     public static ComplicationDiseaseDef qualifyingMofComplication(PlayerDiseaseState state) {
         for (DiseaseDef def : DiseaseRegistry.complications()) {
             if (!(def instanceof ComplicationDiseaseDef cdef)) continue;
-            if (cdef.triggeredBy().isEmpty()) continue;
-            ResourceLocation sourceId = new ResourceLocation(SimpleDiseases.MOD_ID, cdef.triggeredBy().get());
+            if (cdef.triggeredById().isEmpty()) continue;
+            ResourceLocation sourceId = cdef.triggeredById().get();
             if (!(DiseaseRegistry.get(sourceId) instanceof ComplicationDiseaseDef)) continue;
             if (isBacterialGateActive(sourceId, state)) return cdef;
         }

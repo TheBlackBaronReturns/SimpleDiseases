@@ -331,8 +331,10 @@ public final class ContagionManager {
             }
 
             // --- Villager spreading to this player (the existing flat-bump accumulation) ---
+            ResourceLocation pendingIncubId = data.getPendingIncubationId();
             if (ch.villagerContagious() && target instanceof Villager villager && ch.has(villager)
                     && !otherSameGroupActive(data, ch)
+                    && (pendingIncubId == null || id.equals(pendingIncubId))
                     && data.groupImmunityUntil(ch.group) <= gameTime
                     && player.getRandom().nextFloat() < ch.c().playerTransmissionChance()) {
                 data.addProgress(id, ch.c().transmissionBump() * ImmuneManager.getContagionMultiplier(player));

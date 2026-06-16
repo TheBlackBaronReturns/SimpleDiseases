@@ -3,6 +3,7 @@ package com.theblackbaron.simplediseases.compat;
 import com.momosoftworks.coldsweat.api.util.Temperature;
 import com.momosoftworks.coldsweat.util.world.WorldHelper;
 import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
+import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -163,6 +164,45 @@ public class ColdSweatCompat {
         }
         int blockLight = player.level().getBrightness(LightLayer.BLOCK, player.blockPosition());
         // Non-CS fallback: scale fever offset into the biome+light score (CS BODY ±100 ≈ biome 0–2).
+        return getWorldTemp(player) + blockLight / 15.0 > threshold / 50.0;
+    }
+
+    // Septic shock pushes CS BODY toward -SEPTIC_SHOCK_STRENGTH at this rate per tick.
+    // At 1.0/tick a plains player (BODY ≈ 0) reaches -55 in ~55 ticks (≈3 seconds).
+    private static final double SEPTIC_SHOCK_RATE = 1.0;
+
+    /**
+     * Pushes the player's CS BODY temperature toward -SEPTIC_SHOCK_STRENGTH each tick,
+     * simulating distributive vasodilation and cooling in septic shock. At SEPTIC_SHOCK_RATE
+     * units/tick a plains player reaches near-hypothermia in ~55 ticks (≈3 seconds).
+     * No-op without Cold Sweat.
+     */
+    public static void applySepticShock(ServerPlayer player) {
+        if (!LOADED) return;
+        double current = Temperature.get(player, Temperature.Trait.BODY);
+        double target  = -DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH;
+        if (current > target) {
+            Temperature.add(player, Temperature.Trait.BASE,
+                    Math.max(target - current, -SEPTIC_SHOCK_RATE));
+        }
+    }
+
+    // Bacterial recovery uses a fraction of the disease's fever offset as the warmth gate,
+    // keeping the requirement lower than viral recovery while still making severity matter.
+    private static final double BACTERIAL_FEVER_GATE_SCALE = 0.5;
+
+    /**
+     * Whether the player is warm enough for a bacterial infection to recover. Like
+     * {@link #isWarmEnoughToRecover} but the fever offset is scaled by
+     * {@code BACTERIAL_FEVER_GATE_SCALE}, so recovery is possible at a lower body temperature
+     * than the equivalent viral disease while still being harder to achieve at higher fever tiers.
+     */
+    public static boolean isWarmEnoughForBacterialRecovery(ServerPlayer player) {
+        double threshold = MIN_BODY_TEMP_TO_RECOVER + feverOffset(player) * BACTERIAL_FEVER_GATE_SCALE;
+        if (LOADED) {
+            return Temperature.get(player, Temperature.Trait.BODY) >= threshold;
+        }
+        int blockLight = player.level().getBrightness(LightLayer.BLOCK, player.blockPosition());
         return getWorldTemp(player) + blockLight / 15.0 > threshold / 50.0;
     }
 

@@ -68,6 +68,7 @@ dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     compileOnly fg.deobf("curse.maven:cold-sweat-506194:7893262")
+    runtimeOnly fg.deobf("curse.maven:cold-sweat-506194:7893262")
     runtimeOnly fg.deobf("curse.maven:puzzles-lib-495476:6918565")
     runtimeOnly fg.deobf("curse.maven:stylish-effects-543661:5096987")
     runtimeOnly fg.deobf("curse.maven:jei-238222:7920915")

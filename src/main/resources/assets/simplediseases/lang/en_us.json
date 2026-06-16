@@ -44,7 +44,7 @@
   "effect.simplediseases.sepsis_staph_mild": "Mild Sepsis (S. Aureus)",
   "effect.simplediseases.sepsis_staph_moderate": "Moderate Sepsis (S. Aureus)",
   "effect.simplediseases.sepsis_staph_severe": "Severe Sepsis (S. Aureus)",
-  "effect.simplediseases.sepsis_staph_debilitating": "Septic Shock (S. Aureus)",
+  "effect.simplediseases.sepsis_staph_debilitating": "Debilitating Sepsis (S. Aureus)",
 
   "effect.simplediseases.mof_staph_moderate": "Multiple Organ Failure",
 
@@ -111,8 +111,10 @@
   "attribute.simplediseases.disease_max_saturation": "Max Saturation",
   "attribute.simplediseases.disease_knockback_factor": "Knockback Damage",
   "attribute.simplediseases.disease_block_break_speed": "Mining Speed",
-  "simplediseases.fever.light":  "§eLight Fever",
-  "simplediseases.fever.mild":   "§6Mild Fever",
-  "simplediseases.fever.high":   "§cHigh Fever",
-  "simplediseases.fever.severe": "§4Severe Fever"
+
+"simplediseases.fever.light":  "§eMild Fever (38°C)",
+"simplediseases.fever.mild":   "§6High Fever (39°C)",
+"simplediseases.fever.high":   "§cHyperpyrexia (40°C)",
+"simplediseases.fever.severe": "§4Extreme Hyperpyrexia (≥41°C)",
+"simplediseases.shock": "§dSeptic Shock (<36.0°C)"
 }

@@ -16,12 +16,16 @@ import java.util.UUID;
 public class DiseaseMobEffect extends MobEffect {
 
     /** CS BODY units added to the recovery threshold for each fever level (used by DiseaseEffects). */
-    public static final double FEVER_LIGHT  = 10.0;
-    public static final double FEVER_MILD   = 20.0;
-    public static final double FEVER_HIGH   = 35.0;
-    public static final double FEVER_SEVERE = 50.0;
+    public static final double FEVER_LIGHT  =  5.0;
+    public static final double FEVER_MILD   = 10.0;
+    public static final double FEVER_HIGH   = 15.0;
+    public static final double FEVER_SEVERE = 20.0;
+
+    /** Target CS BODY temperature magnitude for septic shock — player is pushed toward -SEPTIC_SHOCK_STRENGTH. */
+    public static final double SEPTIC_SHOCK_STRENGTH = 55.0;
 
     private double feverOffset = 0.0;
+    private double shockOffset = 0.0;
 
     // LinkedHashMap preserves insertion order so JEED renders modifiers in the order modifier() is called.
     private final LinkedHashMap<Attribute, AttributeModifier> orderedModifiers = new LinkedHashMap<>();
@@ -50,5 +54,15 @@ public class DiseaseMobEffect extends MobEffect {
 
     public double getFeverOffset() {
         return feverOffset;
+    }
+
+    /** Sets the septic shock strength — CS BODY is pushed toward -shockOffset each tick; chainable. */
+    public DiseaseMobEffect shock(double offset) {
+        this.shockOffset = offset;
+        return this;
+    }
+
+    public double getShockOffset() {
+        return shockOffset;
     }
 }

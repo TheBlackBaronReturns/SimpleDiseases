@@ -44,4 +44,25 @@ public abstract class EffectRendererMixin {
 
         list.add(headerIdx + 1, Component.translatable(langKey));
     }
+
+    @Inject(method = "getTooltipsWithDescription", at = @At("RETURN"), require = 0)
+    private static void injectShockTooltip(
+            MobEffectInstance instance, TooltipFlag flag, boolean a, boolean b,
+            CallbackInfoReturnable<List<Component>> cir) {
+        MobEffect effect = instance.getEffect();
+        if (!(effect instanceof DiseaseMobEffect dme)) return;
+        if (dme.getShockOffset() <= 0.0) return;
+
+        List<Component> list = cir.getReturnValue();
+        int headerIdx = -1;
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getContents() instanceof TranslatableContents tc
+                    && "potion.whenDrank".equals(tc.getKey())) {
+                headerIdx = i;
+                break;
+            }
+        }
+        if (headerIdx < 0) return;
+        list.add(headerIdx + 1, Component.translatable("simplediseases.shock"));
+    }
 }

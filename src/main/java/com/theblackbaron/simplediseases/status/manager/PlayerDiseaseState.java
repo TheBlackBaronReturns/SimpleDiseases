@@ -118,6 +118,7 @@ public class PlayerDiseaseState {
     public DiseaseInstance getOrCreate(ResourceLocation id) {
         return diseases.computeIfAbsent(id, k -> {
             DiseaseDef def = DiseaseRegistry.get(k);
+            if (def == null) return null;
             return new DiseaseInstance(k, def.category().componentTypes());
         });
     }
@@ -220,7 +221,9 @@ public class PlayerDiseaseState {
 
     /** Clamp-adds progress, looking up the cap from the disease definition. */
     public void addProgress(ResourceLocation id, double delta) {
-        ProgressComponent p = getOrCreate(id).get(Components.PROGRESS);
+        DiseaseInstance inst = getOrCreate(id);
+        if (inst == null) return;
+        ProgressComponent p = inst.get(Components.PROGRESS);
         if (p == null) return;
         DiseaseDef def = DiseaseRegistry.get(id);
         double cap = def instanceof ViralDiseaseDef v ? v.progressCap()
@@ -233,7 +236,9 @@ public class PlayerDiseaseState {
     /** Debug helper: seed a complication's source (so {@code /sdaccumulate pneumonia} can latch standalone
      *  without an actual qualifying disease). No-op if a source is already set. */
     public void debugSetComplicationSource(ResourceLocation complicationId, ResourceLocation sourceId, long latchTicks) {
-        SourceComponent s = getOrCreate(complicationId).get(Components.SOURCE);
+        DiseaseInstance inst = getOrCreate(complicationId);
+        if (inst == null) return;
+        SourceComponent s = inst.get(Components.SOURCE);
         if (s != null && !s.hasSource()) { s.sourceId = sourceId; s.latchTicks = latchTicks; }
     }
 
@@ -260,7 +265,8 @@ public class PlayerDiseaseState {
             ListTag list = root.getList(KEY_DISEASES, Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag t = list.getCompound(i);
-                ResourceLocation id = new ResourceLocation(t.getString("id"));
+                ResourceLocation id = ResourceLocation.tryParse(t.getString("id"));
+                if (id == null) continue; // malformed id — skip rather than crash
                 DiseaseDef def = DiseaseRegistry.get(id);
                 if (def == null) continue; // unknown/removed disease — skip rather than corrupt
                 state.diseases.put(id, DiseaseInstance.load(t, def.category().componentTypes()));
@@ -274,7 +280,7 @@ public class PlayerDiseaseState {
         }
         state.pendingIncubation = root.getDouble(KEY_INCUBATION);
         if (root.contains(KEY_INCUBATION_ID)) {
-            state.pendingIncubationId = new ResourceLocation(root.getString(KEY_INCUBATION_ID));
+            state.pendingIncubationId = ResourceLocation.tryParse(root.getString(KEY_INCUBATION_ID));
         }
         state.wasInInfectedWater   = root.getBoolean(KEY_WAS_WATER);    // false if absent
         if (root.contains(KEY_INJURY, Tag.TAG_COMPOUND)) {

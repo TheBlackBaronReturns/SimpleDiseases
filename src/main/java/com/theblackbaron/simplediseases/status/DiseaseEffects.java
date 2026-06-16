@@ -50,10 +50,10 @@ public class DiseaseEffects {
             new BaseMod(() -> Attributes.ATTACK_SPEED,            "attack_speed",      -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL),
             new BaseMod(DiseaseAttributes.BLOCK_BREAK_SPEED::get, "block_break_speed", -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
         ), Map.of(
-            Severity.MILD,         DiseaseMobEffect.FEVER_MILD,
-            Severity.MODERATE,     DiseaseMobEffect.FEVER_HIGH,
-            Severity.SEVERE,       DiseaseMobEffect.FEVER_SEVERE,
-            Severity.DEBILITATING, DiseaseMobEffect.FEVER_SEVERE
+            Severity.MILD,         DiseaseMobEffect.FEVER_LIGHT,
+            Severity.MODERATE,     DiseaseMobEffect.FEVER_MILD,
+            Severity.SEVERE,       DiseaseMobEffect.FEVER_HIGH,
+            Severity.DEBILITATING, DiseaseMobEffect.FEVER_HIGH
         ));
 
         // RSV — 3 tiers. Moderate→light fever, Severe→mild fever.
@@ -103,20 +103,26 @@ public class DiseaseEffects {
             new BaseMod(() -> Attributes.ATTACK_DAMAGE,          "attack_damage",    -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL),
             new BaseMod(DiseaseAttributes.KNOCKBACK_FACTOR::get, "knockback_factor", -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
         ), Map.of(
-            Severity.MILD,     DiseaseMobEffect.FEVER_MILD,
-            Severity.MODERATE, DiseaseMobEffect.FEVER_HIGH,
-            Severity.SEVERE,   DiseaseMobEffect.FEVER_SEVERE
+            Severity.MILD,     DiseaseMobEffect.FEVER_LIGHT,
+            Severity.MODERATE, DiseaseMobEffect.FEVER_MILD,
+            Severity.SEVERE,   DiseaseMobEffect.FEVER_HIGH
         ));
 
-        // Staph sepsis — 4-tier. Same as flu except Debilitating (septic shock) has no fever.
+        // Staph sepsis — 4-tier. MILD/MODERATE have fever; SEVERE/DEBILITATING enter septic shock
+        // (body temperature is forced down toward hypothermia — fever is removed from SEVERE).
         List<BaseMod> sepsisMods = List.of(
             new BaseMod(() -> Attributes.MAX_HEALTH, "max_health", -2.0, AttributeModifier.Operation.ADDITION)
         );
-        registerSepsis("sepsis_staph", sepsisMods, Map.of(
-            Severity.MILD,     DiseaseMobEffect.FEVER_MILD,
-            Severity.MODERATE, DiseaseMobEffect.FEVER_HIGH,
-            Severity.SEVERE,   DiseaseMobEffect.FEVER_SEVERE
-        ));
+        registerSepsis("sepsis_staph", sepsisMods,
+            Map.of(
+                Severity.MILD,     DiseaseMobEffect.FEVER_MILD,
+                Severity.MODERATE, DiseaseMobEffect.FEVER_HIGH
+            ),
+            Map.of(
+                Severity.SEVERE,       DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH,
+                Severity.DEBILITATING, DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH
+            )
+        );
 
         // Multiple organ failure — 1-tier (MODERATE only). No fever; lethality via direct damage.
         registerMof("mof_staph");
@@ -126,16 +132,23 @@ public class DiseaseEffects {
 
     private static EnumMap<Severity, RegistryObject<MobEffect>> registerVariants(
             String path, int color, int tierCount, List<BaseMod> baseMods) {
-        return registerVariants(path, color, tierCount, baseMods, Map.of());
+        return registerVariants(path, color, tierCount, baseMods, Map.of(), Map.of());
     }
 
     private static EnumMap<Severity, RegistryObject<MobEffect>> registerVariants(
             String path, int color, int tierCount, List<BaseMod> baseMods,
             Map<Severity, Double> feverOffsets) {
+        return registerVariants(path, color, tierCount, baseMods, feverOffsets, Map.of());
+    }
+
+    private static EnumMap<Severity, RegistryObject<MobEffect>> registerVariants(
+            String path, int color, int tierCount, List<BaseMod> baseMods,
+            Map<Severity, Double> feverOffsets, Map<Severity, Double> shockOffsets) {
         EnumMap<Severity, RegistryObject<MobEffect>> byTier = new EnumMap<>(Severity.class);
         for (Severity sev : Severity.window(tierCount)) {
             String regName = path + "_" + sev.id();
             double feverOffset = feverOffsets.getOrDefault(sev, 0.0);
+            double shockOffset = shockOffsets.getOrDefault(sev, 0.0);
             RegistryObject<MobEffect> variant = EFFECTS.register(regName, () -> {
                 DiseaseMobEffect effect = new DiseaseMobEffect(MobEffectCategory.HARMFUL, color);
                 for (BaseMod m : baseMods) {
@@ -143,6 +156,7 @@ public class DiseaseEffects {
                     effect.modifier(m.attribute().get(), uuid, m.amount() * sev.debuffMult, m.op());
                 }
                 if (feverOffset > 0.0) effect.fever(feverOffset);
+                if (shockOffset > 0.0) effect.shock(shockOffset);
                 return effect;
             });
             byTier.put(sev, variant);
@@ -181,6 +195,11 @@ public class DiseaseEffects {
 
     private static void registerSepsis(String path, List<BaseMod> baseMods, Map<Severity, Double> feverOffsets) {
         SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, baseMods, feverOffsets));
+    }
+
+    private static void registerSepsis(String path, List<BaseMod> baseMods,
+                                        Map<Severity, Double> feverOffsets, Map<Severity, Double> shockOffsets) {
+        SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, baseMods, feverOffsets, shockOffsets));
     }
 
     private static void registerMof(String path) {
@@ -264,12 +283,21 @@ public class DiseaseEffects {
     }
 
     public static boolean hasShiveringDisease(LivingEntity e) {
-        return hasSevereOrWorseVariant(e, "flu")
-                || hasSevereOrWorseVariant(e, "rsv")
-                || hasSevereOrWorseVariant(e, "cold")
-                || hasSevereBronchitis(e)
-                || hasModerateOrWorsePneumonia(e)
-                || hasSevereSepsis(e);
+        for (net.minecraft.world.effect.MobEffectInstance inst : e.getActiveEffects()) {
+            if (inst.getEffect() instanceof DiseaseMobEffect dme
+                    && dme.getFeverOffset() >= DiseaseMobEffect.FEVER_HIGH) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasSepticShock(LivingEntity e) {
+        for (net.minecraft.world.effect.MobEffectInstance inst : e.getActiveEffects()) {
+            if (inst.getEffect() instanceof DiseaseMobEffect dme && dme.getShockOffset() > 0.0)
+                return true;
+        }
+        return false;
     }
 
     private static boolean hasModerateOrWorsePneumonia(LivingEntity e) {

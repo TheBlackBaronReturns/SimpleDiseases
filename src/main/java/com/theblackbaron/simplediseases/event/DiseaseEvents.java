@@ -242,6 +242,10 @@ public class DiseaseEvents {
             tickExistingDiseases(state, ctx, true);
             tickPotentialComplications(player, state, ctx);
 
+            if (DiseaseEffects.hasSepticShock(player)) {
+                ColdSweatCompat.applySepticShock(player);
+            }
+
             if (active != null && state.inRecovery(active) && DiseaseRegistry.get(active) instanceof ViralDiseaseDef v) {
                 DiseaseParticleEmitter.tick(player, v.particle().get());
             }
@@ -249,7 +253,7 @@ public class DiseaseEvents {
 
         contagionManager.tick(player, state);
 
-        if (gameTime % 200 == player.getId() % 200) saveToPlayer(player);
+        if (gameTime % 200 == Math.floorMod(player.getId(), 200)) saveToPlayer(player);
 
         UUID pid = player.getUUID();
         if (gameTime % 20 == 0) {

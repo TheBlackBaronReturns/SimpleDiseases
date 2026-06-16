@@ -28,7 +28,8 @@ public class ClientForgeEvents {
     @SubscribeEvent
     public static void onComputeCameraAngles(ViewportEvent.ComputeCameraAngles event) {
         LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null || !DiseaseEffects.hasShiveringDisease(player)) return;
+        if (player == null
+                || (!DiseaseEffects.hasShiveringDisease(player) && !DiseaseEffects.hasSepticShock(player))) return;
         double t = player.tickCount + event.getPartialTick();
         float roll = (float) (Math.sin(t * 2.70) * SHIVER_ROLL_DEGREES
                 + Math.sin(t * 5.10) * SHIVER_ROLL_DEGREES * 0.35F);
@@ -39,7 +40,8 @@ public class ClientForgeEvents {
 
     @SubscribeEvent
     public static void onRenderPlayerPre(RenderPlayerEvent.Pre event) {
-        if (!DiseaseEffects.hasShiveringDisease(event.getEntity())) return;
+        if (!DiseaseEffects.hasShiveringDisease(event.getEntity())
+                && !DiseaseEffects.hasSepticShock(event.getEntity())) return;
         double t = event.getEntity().tickCount + event.getPartialTick();
         float roll = (float) (Math.sin(t * 2.90) * BODY_SHIVER_DEGREES);
         double x = Math.sin(t * 5.30) * BODY_SHIVER_OFFSET;

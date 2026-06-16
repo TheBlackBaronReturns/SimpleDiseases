@@ -1,6 +1,7 @@
 package com.theblackbaron.simplediseases.status.category;
 
 import com.mojang.serialization.MapCodec;
+import com.theblackbaron.simplediseases.compat.ColdSweatCompat;
 import com.theblackbaron.simplediseases.SimpleDiseases;
 import com.theblackbaron.simplediseases.status.component.ComponentType;
 import com.theblackbaron.simplediseases.status.component.Components;
@@ -127,7 +128,9 @@ public final class BacterialCategory implements DiseaseCategory {
         }
 
         if (inCapRecovery) {
-            prog.add(-bdef.recoveryRate(), bdef.progressCap());
+            if (ColdSweatCompat.isWarmEnoughForBacterialRecovery(player)) {
+                prog.add(-bdef.recoveryRate(), bdef.progressCap());
+            }
             if (prog.progress <= 0.0) {
                 prog.inRecovery = false;
                 player.sendSystemMessage(Component.translatable(bdef.curedKey()));
@@ -138,6 +141,9 @@ public final class BacterialCategory implements DiseaseCategory {
             prog.add(bdef.worseningRate(), bdef.progressCap());
             tickSeverityWorsening(bdef, tier, prog.progress, player);
         }
+
+        // Defensive: latched without a roll (e.g. migrated save with severity=-1).
+        if (!tier.rolled()) rollSeverity(bdef, tier, player);
 
         // Swap to the current tier's permanent effect.
         Severity severity = tier.severity();

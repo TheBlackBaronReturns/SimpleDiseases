@@ -3,11 +3,14 @@ package com.theblackbaron.simplediseases.status.def;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.theblackbaron.simplediseases.SimpleDiseases;
 import com.theblackbaron.simplediseases.status.category.DiseaseCategories;
 import com.theblackbaron.simplediseases.status.category.DiseaseCategory;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -56,8 +59,19 @@ public record ComplicationDiseaseDef(
     List<Double>       worseningThresholds    // worsening trigger points (stochastic or deterministic)
 ) implements DiseaseDef {
 
+    private static final Map<String, ResourceLocation> TRIGGERED_BY_CACHE = new HashMap<>();
+
     /** True when {@code worseningRate > 0} (deterministic threshold model); false = stochastic momentum. */
     public boolean deterministicWorsening() { return worseningRate > 0.0; }
+
+    /**
+     * The fully-qualified {@link ResourceLocation} for {@link #triggeredBy()}, pre-computed and cached
+     * so callers on the per-tick path don't allocate a new instance on every invocation.
+     */
+    public Optional<ResourceLocation> triggeredById() {
+        return triggeredBy.map(path ->
+            TRIGGERED_BY_CACHE.computeIfAbsent(path, p -> new ResourceLocation(SimpleDiseases.MOD_ID, p)));
+    }
 
     /** Translation key for the "condition worsens" message, derived from the disease id path. */
     public String worsensKey() { return "message.simplediseases." + id().getPath() + "_worsens"; }
