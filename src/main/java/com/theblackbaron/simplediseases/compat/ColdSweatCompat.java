@@ -1,8 +1,14 @@
 package com.theblackbaron.simplediseases.compat;
 
 import com.momosoftworks.coldsweat.api.event.core.registry.TempModifierRegisterEvent;
+import com.momosoftworks.coldsweat.api.registry.TempModifierRegistry;
+import com.momosoftworks.coldsweat.api.temperature.modifier.ArmorInsulationTempModifier;
+import com.momosoftworks.coldsweat.api.temperature.modifier.TempModifier;
+import com.momosoftworks.coldsweat.api.temperature.modifier.WaterskinTempModifier;
 import com.momosoftworks.coldsweat.api.util.Temperature;
 import com.momosoftworks.coldsweat.api.util.placement.Matcher;
+import com.momosoftworks.coldsweat.api.util.placement.Mode;
+import com.momosoftworks.coldsweat.api.util.placement.Order;
 import com.momosoftworks.coldsweat.api.util.placement.Placement;
 import com.momosoftworks.coldsweat.util.world.WorldHelper;
 import com.theblackbaron.simplediseases.SimpleDiseases;
@@ -15,6 +21,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
+import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -36,10 +44,14 @@ public class ColdSweatCompat {
         new ResourceLocation("cold_sweat", "goat_fur_leggings"),
         new ResourceLocation("cold_sweat", "goat_fur_boots"),
     };
-    private static final String WATERSKIN_TEMP_KEY     = "temperature"; // double; >0 = hot
-    private static final String WATERSKIN_TEMP_KEY_ALT = "temp";        // defensive fallback
+    private static final String WATERSKIN_TEMP_KEY      = "Temperature"; // CS official NBT key
+    private static final String WATERSKIN_TEMP_KEY_ALT  = "temperature";
+    private static final String WATERSKIN_TEMP_KEY_ALT2 = "temp";
+    private static final String CARRIED_WATERSKIN_NBT_TAG = "simplediseases_carried";
     // World-temp bonus a carried hot waterskin adds to the drying calc (≈ a small heat source).
     private static final double WATERSKIN_DRY_HEAT     = 1.0;
+    // Passive CORE warming from a carried hot waterskin during septic shock (fraction of NBT temp).
+    private static final double CARRIED_WATERSKIN_CORE_SCALE = 0.25;
     // Minimum Cold Sweat BODY temperature (−100…+100 scale, 0 = comfortable) for a respiratory illness
     // to recover. At/above this the player counts as "warm enough" — so a fire/insulation that warms the
     // body lets a cold recover even in a frozen biome. Lower this (toward negative) to allow recovery
@@ -87,11 +99,33 @@ public class ColdSweatCompat {
     }
 
     private static boolean isHotWaterskin(ItemStack stack, Item filledWaterskin) {
-        if (!stack.is(filledWaterskin) || !stack.hasTag()) return false;
+        if (!stack.is(filledWaterskin)) return false;
+        return getWaterskinTemp(stack) > 0.0;
+    }
+
+    private static double getWaterskinTemp(ItemStack stack) {
+        if (!stack.hasTag()) return 0.0;
         var tag = stack.getTag();
-        double temp = tag.contains(WATERSKIN_TEMP_KEY) ? tag.getDouble(WATERSKIN_TEMP_KEY)
-                    : tag.getDouble(WATERSKIN_TEMP_KEY_ALT);
-        return temp > 0.0;
+        if (tag.contains(WATERSKIN_TEMP_KEY)) return tag.getDouble(WATERSKIN_TEMP_KEY);
+        if (tag.contains(WATERSKIN_TEMP_KEY_ALT)) return tag.getDouble(WATERSKIN_TEMP_KEY_ALT);
+        return tag.getDouble(WATERSKIN_TEMP_KEY_ALT2);
+    }
+
+    /** Max positive NBT temperature from carried filled waterskins (inventory + offhand). */
+    public static double getHotWaterskinTemp(ServerPlayer player) {
+        if (!LOADED) return 0.0;
+        resolveItems();
+        Item filled = filledWaterskinItem;
+        if (filled == null) return 0.0;
+        double max = 0.0;
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.is(filled)) {
+                double temp = getWaterskinTemp(stack);
+                if (temp > max) max = temp;
+            }
+        }
+        double offhand = getWaterskinTemp(player.getOffhandItem());
+        return Math.max(max, player.getOffhandItem().is(filled) ? offhand : 0.0);
     }
 
     /** Number of worn Cold Sweat goat-fur armor pieces (0–4). 0 without Cold Sweat. */
@@ -172,31 +206,107 @@ public class ColdSweatCompat {
         return getWorldTemp(player) + blockLight / 15.0 > threshold / 50.0;
     }
 
-    // Septic shock applies a BASE-trait TempModifier penalty (see SepticShockTempModifier).
+    // Septic shock applies BASE + RATE TempModifier penalties (see SepticShockTempModifier).
     private static final ResourceLocation SEPTIC_SHOCK_MODIFIER_ID =
             new ResourceLocation(SimpleDiseases.MOD_ID, "septic_shock");
+    private static final ResourceLocation SEPTIC_SHOCK_REWARM_MODIFIER_ID =
+            new ResourceLocation(SimpleDiseases.MOD_ID, "septic_shock_rewarm");
+    private static final Placement SEPTIC_SHOCK_BASE_PLACEMENT =
+            Placement.LAST.noDuplicates(Matcher.SAME_CLASS);
+    private static final Placement SEPTIC_SHOCK_RATE_PLACEMENT =
+            Placement.of(Mode.ADD_BEFORE, Order.FIRST, mod -> mod instanceof ArmorInsulationTempModifier)
+                    .noDuplicates(Matcher.SAME_CLASS)
+                    .orElse(Placement.LAST);
+    private static final Placement SEPTIC_SHOCK_REWARM_PLACEMENT =
+            Placement.of(Mode.ADD_AFTER, Order.LAST, mod -> mod instanceof ArmorInsulationTempModifier)
+                    .noDuplicates(Matcher.SAME_CLASS)
+                    .orElse(Placement.LAST);
+    private static final Placement CARRIED_WATERSKIN_PLACEMENT =
+            Placement.LAST.noDuplicates(Matcher.SAME_CLASS);
 
     /**
-     * Ensures the septic-shock BASE penalty modifier is present while shock is active and removed
-     * when cured. The modifier subtracts {@link DiseaseMobEffect#getShockOffset()} from BASE each
-     * recalc so CORE thermodynamics (environment, insulation, heat) still move BODY freely.
-     * No-op without Cold Sweat.
+     * Ensures septic-shock BASE/RATE modifiers and carried hot-waterskin CORE warming are present
+     * while shock is active, and removed when cured. No-op without Cold Sweat.
      */
     public static void syncSepticShockModifier(ServerPlayer player) {
         if (!LOADED) return;
         boolean inShock = DiseaseEffects.hasSepticShock(player);
-        boolean hasMod = Temperature.hasModifier(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
-        if (inShock && !hasMod) {
-            Temperature.addModifier(player, new SepticShockTempModifier(), Temperature.Trait.BASE,
-                    Placement.LAST.noDuplicates(Matcher.SAME_CLASS));
-        } else if (!inShock && hasMod) {
-            Temperature.removeModifiers(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
+        boolean hasBase = Temperature.hasModifier(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
+        boolean hasRate = Temperature.hasModifier(player, Temperature.Trait.RATE, SepticShockTempModifier.class);
+        boolean hasRewarm = Temperature.hasModifier(player, Temperature.Trait.RATE, SepticShockRewarmModifier.class);
+        if (inShock) {
+            if (!hasBase) {
+                Temperature.addModifier(player, createSepticShockModifier(), Temperature.Trait.BASE, SEPTIC_SHOCK_BASE_PLACEMENT);
+            }
+            if (!hasRate) {
+                Temperature.addModifier(player, createSepticShockModifier(), Temperature.Trait.RATE, SEPTIC_SHOCK_RATE_PLACEMENT);
+            }
+            if (!hasRewarm) {
+                Temperature.addModifier(player, createRewarmModifier(), Temperature.Trait.RATE, SEPTIC_SHOCK_REWARM_PLACEMENT);
+            }
+            syncCarriedHotWaterskin(player);
+        } else if (hasBase || hasRate || hasRewarm || hasCarriedWaterskinModifier(player)
+                || Temperature.hasModifier(player, Temperature.Trait.CORE, SepticShockTempModifier.class)) {
+            removeSepticShockModifiers(player);
         }
+    }
+
+    private static void syncCarriedHotWaterskin(ServerPlayer player) {
+        removeCarriedWaterskinModifier(player);
+        double temp = getHotWaterskinTemp(player);
+        if (temp <= 0.0) return;
+        WaterskinTempModifier mod = new WaterskinTempModifier(temp * CARRIED_WATERSKIN_CORE_SCALE);
+        mod.getNBT().putBoolean(CARRIED_WATERSKIN_NBT_TAG, true);
+        mod.tickRate(5);
+        Temperature.addModifier(player, mod, Temperature.Trait.CORE, CARRIED_WATERSKIN_PLACEMENT);
+    }
+
+    private static boolean hasCarriedWaterskinModifier(ServerPlayer player) {
+        return Temperature.getModifiers(player, Temperature.Trait.CORE).stream()
+                .anyMatch(ColdSweatCompat::isCarriedWaterskinModifier);
+    }
+
+    private static boolean isCarriedWaterskinModifier(TempModifier mod) {
+        return mod instanceof WaterskinTempModifier
+                && mod.getNBT().getBoolean(CARRIED_WATERSKIN_NBT_TAG);
+    }
+
+    private static void removeCarriedWaterskinModifier(ServerPlayer player) {
+        Temperature.removeModifiers(player, Temperature.Trait.CORE, ColdSweatCompat::isCarriedWaterskinModifier);
+    }
+
+    private static void removeSepticShockModifiers(ServerPlayer player) {
+        Temperature.removeModifiers(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
+        Temperature.removeModifiers(player, Temperature.Trait.RATE, SepticShockTempModifier.class);
+        Temperature.removeModifiers(player, Temperature.Trait.RATE, SepticShockRewarmModifier.class);
+        Temperature.removeModifiers(player, Temperature.Trait.CORE, SepticShockTempModifier.class);
+        removeCarriedWaterskinModifier(player);
+    }
+
+    private static SepticShockTempModifier createSepticShockModifier() {
+        return TempModifierRegistry.getValue(SEPTIC_SHOCK_MODIFIER_ID)
+                .map(m -> (SepticShockTempModifier) m)
+                .orElseGet(SepticShockTempModifier::new);
+    }
+
+    private static SepticShockRewarmModifier createRewarmModifier() {
+        return TempModifierRegistry.getValue(SEPTIC_SHOCK_REWARM_MODIFIER_ID)
+                .map(m -> (SepticShockRewarmModifier) m)
+                .orElseGet(SepticShockRewarmModifier::new);
+    }
+
+    /** Runs before CS {@code tickTemperature} so the shock modifier is present for that tick. */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onLivingTickSyncSepticShock(LivingEvent.LivingTickEvent event) {
+        if (event.getEntity().level().isClientSide) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        syncSepticShockModifier(player);
     }
 
     @SubscribeEvent
     public static void onTempModifierRegister(TempModifierRegisterEvent event) {
         event.register(SEPTIC_SHOCK_MODIFIER_ID, SepticShockTempModifier::new);
+        event.register(SEPTIC_SHOCK_REWARM_MODIFIER_ID, SepticShockRewarmModifier::new);
     }
 
     // Bacterial recovery uses a fraction of the disease's fever offset as the warmth gate,

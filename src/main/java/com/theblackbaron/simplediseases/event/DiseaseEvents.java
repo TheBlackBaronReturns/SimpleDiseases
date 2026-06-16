@@ -247,8 +247,6 @@ public class DiseaseEvents {
             }
         }
 
-        ColdSweatCompat.syncSepticShockModifier(player);
-
         contagionManager.tick(player, state);
 
         if (gameTime % 200 == Math.floorMod(player.getId(), 200)) saveToPlayer(player);

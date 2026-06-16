@@ -119,8 +119,8 @@ public class DiseaseEffects {
                 Severity.MODERATE, DiseaseMobEffect.FEVER_HIGH
             ),
             Map.of(
-                Severity.SEVERE,       DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH,
-                Severity.DEBILITATING, DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH
+                Severity.SEVERE,       DiseaseMobEffect.SEPTIC_SHOCK_BASE_OFFSET,
+                Severity.DEBILITATING, DiseaseMobEffect.SEPTIC_SHOCK_BASE_OFFSET
             )
         );
 

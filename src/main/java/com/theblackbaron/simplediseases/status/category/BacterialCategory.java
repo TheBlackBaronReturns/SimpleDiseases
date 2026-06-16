@@ -11,6 +11,7 @@ import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.component.TierComponent;
 import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
+import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
 import com.theblackbaron.simplediseases.status.service.SymptomService;
@@ -155,6 +156,9 @@ public final class BacterialCategory implements DiseaseCategory {
         }
         if (!player.hasEffect(bdef.effectFor(severity).get())) {
             player.addEffect(new MobEffectInstance(bdef.effectFor(severity).get(), -1, 0, false, false, true));
+        }
+        if (bdef.id().equals(DiseaseRegistry.SEPSIS_STAPH)) {
+            ColdSweatCompat.syncSepticShockModifier(player);
         }
 
         // Suppress episodes when a complication child has passed its first threshold.

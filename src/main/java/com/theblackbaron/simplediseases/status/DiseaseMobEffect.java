@@ -21,8 +21,24 @@ public class DiseaseMobEffect extends MobEffect {
     public static final double FEVER_HIGH   = 15.0;
     public static final double FEVER_SEVERE = 20.0;
 
-    /** CS BASE-trait temperature penalty for septic shock (subtracted from BASE; not a BODY setpoint). */
-    public static final double SEPTIC_SHOCK_STRENGTH = 55.0;
+    /** CS BASE-trait hypothermia floor for septic shock (BODY = CORE + BASE; not a setpoint). */
+    public static final double SEPTIC_SHOCK_BASE_OFFSET = 38.0;
+    /** Extra cooling multiplier on negative RATE during shock (vasodilation / heat loss). */
+    public static final double SEPTIC_SHOCK_COOL_MULT = 1.25;
+    /** Pre-armor warming multiplier when CORE is below comfort (superseded post-armor by REWARM_MULT). */
+    public static final double SEPTIC_SHOCK_WARM_BOOST = 2.0;
+    /** Post-armor RATE multiplier applied after insulation during hypothermic rewarming. */
+    public static final double SEPTIC_SHOCK_REWARM_MULT = 2.75;
+    /** WORLD (MC scale) above default habitable max before BASE hypothermia floor begins easing. */
+    public static final double SEPTIC_SHOCK_HEAT_RELIEF_THRESHOLD = 1.8;
+    /** CS units of BASE penalty removed per MC WORLD unit above {@link #SEPTIC_SHOCK_HEAT_RELIEF_THRESHOLD}. */
+    public static final double SEPTIC_SHOCK_HEAT_RELIEF_SCALE = 6.0;
+    /** Maximum fraction of {@link #SEPTIC_SHOCK_BASE_OFFSET} that environmental heat can relieve. */
+    public static final double SEPTIC_SHOCK_MAX_HEAT_RELIEF_FRAC = 0.55;
+
+    /** @deprecated Use {@link #SEPTIC_SHOCK_BASE_OFFSET}. */
+    @Deprecated
+    public static final double SEPTIC_SHOCK_STRENGTH = SEPTIC_SHOCK_BASE_OFFSET;
 
     private double feverOffset = 0.0;
     private double shockOffset = 0.0;
