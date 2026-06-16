@@ -51,7 +51,7 @@ public class SdCommands {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
         dispatcher.register(
-            Commands.literal("sddebugviral")
+            Commands.literal("sdviral")
                 .executes(ctx -> {
                     ServerPlayer player;
                     try { player = ctx.getSource().getPlayerOrException(); }
@@ -67,7 +67,7 @@ public class SdCommands {
                 })
         );
         dispatcher.register(
-            Commands.literal("sddebugbacterial")
+            Commands.literal("sdbacterial")
                 .executes(ctx -> {
                     ServerPlayer player;
                     try { player = ctx.getSource().getPlayerOrException(); }

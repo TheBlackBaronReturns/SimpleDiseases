@@ -182,7 +182,7 @@ public class ColdSweatCompat {
         double current = Temperature.get(player, Temperature.Trait.BODY);
         double target  = -DiseaseMobEffect.SEPTIC_SHOCK_STRENGTH;
         if (current > target) {
-            Temperature.add(player, Temperature.Trait.BASE,
+            Temperature.add(player, Temperature.Trait.CORE,
                     Math.max(target - current, -SEPTIC_SHOCK_RATE));
         }
     }
