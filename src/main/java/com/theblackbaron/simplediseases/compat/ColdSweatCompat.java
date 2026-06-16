@@ -2,13 +2,8 @@ package com.theblackbaron.simplediseases.compat;
 
 import com.momosoftworks.coldsweat.api.event.core.registry.TempModifierRegisterEvent;
 import com.momosoftworks.coldsweat.api.registry.TempModifierRegistry;
-import com.momosoftworks.coldsweat.api.temperature.modifier.ArmorInsulationTempModifier;
-import com.momosoftworks.coldsweat.api.temperature.modifier.TempModifier;
-import com.momosoftworks.coldsweat.api.temperature.modifier.WaterskinTempModifier;
 import com.momosoftworks.coldsweat.api.util.Temperature;
 import com.momosoftworks.coldsweat.api.util.placement.Matcher;
-import com.momosoftworks.coldsweat.api.util.placement.Mode;
-import com.momosoftworks.coldsweat.api.util.placement.Order;
 import com.momosoftworks.coldsweat.api.util.placement.Placement;
 import com.momosoftworks.coldsweat.util.world.WorldHelper;
 import com.theblackbaron.simplediseases.SimpleDiseases;
@@ -34,9 +29,6 @@ public class ColdSweatCompat {
 
     public static final boolean LOADED = ModList.get().isLoaded("cold_sweat");
 
-    // Cold Sweat item ids/NBT (confirmed against ColdSweat-2.4.jar). Resolved to Item references
-    // once and cached (see resolveItems) so the per-tick hot path does NO registry lookups — these
-    // run every tick for every player, so this matters at high player counts.
     private static final ResourceLocation FILLED_WATERSKIN_ID = new ResourceLocation("cold_sweat", "filled_waterskin");
     private static final ResourceLocation[] GOAT_FUR_ARMOR_IDS = {
         new ResourceLocation("cold_sweat", "goat_fur_helmet"),
@@ -44,31 +36,23 @@ public class ColdSweatCompat {
         new ResourceLocation("cold_sweat", "goat_fur_leggings"),
         new ResourceLocation("cold_sweat", "goat_fur_boots"),
     };
-    private static final String WATERSKIN_TEMP_KEY      = "Temperature"; // CS official NBT key
+    private static final String WATERSKIN_TEMP_KEY      = "Temperature";
     private static final String WATERSKIN_TEMP_KEY_ALT  = "temperature";
     private static final String WATERSKIN_TEMP_KEY_ALT2 = "temp";
-    private static final String CARRIED_WATERSKIN_NBT_TAG = "simplediseases_carried";
-    // World-temp bonus a carried hot waterskin adds to the drying calc (≈ a small heat source).
-    private static final double WATERSKIN_DRY_HEAT     = 1.0;
-    // Passive CORE warming from a carried hot waterskin during septic shock (fraction of NBT temp).
-    private static final double CARRIED_WATERSKIN_CORE_SCALE = 0.25;
-    // Minimum Cold Sweat BODY temperature (−100…+100 scale, 0 = comfortable) for a respiratory illness
-    // to recover. At/above this the player counts as "warm enough" — so a fire/insulation that warms the
-    // body lets a cold recover even in a frozen biome. Lower this (toward negative) to allow recovery
-    // while still mildly cold; raise it to require the player be actively warm.
-    private static final double MIN_BODY_TEMP_TO_RECOVER = 0.0;
-    // Accumulation gates (gate-only — the accumulation RATE is computed separately and is unaffected):
-    //  • Damp path: wet clothing provides NO insulation, so the gate ignores body temp/insulation entirely
-    //    and looks only at the ambient the player is exposed to — biome/season temp plus real heat sources
-    //    (nearby fire/torch/lava via block light, and a carried hot waterskin). Below DAMP_COLD_THRESHOLD
-    //    (matches getColdRate's nonzero band) the damp player is cold enough to accumulate.
-    //  • Windchill path: clothes are DRY here, so insulation still protects — gate on the player's CS BODY
-    //    temperature (which includes insulation) minus a windchill chill, below the comfort point.
-    private static final double DAMP_COLD_THRESHOLD        = 1.0; // ambient (worldTemp scale) below this = cold
-    private static final double BODY_TEMP_ACCUMULATE_BELOW = 0.0; // CS BODY scale, 0 = comfortable
-    private static final double WINDCHILL_CHILL            = 10.0; // body-temp chill while in windchill
+    // World-temp bonus a carried hot waterskin adds to drying / recovery warmth calcs.
+    private static final double WATERSKIN_DRY_HEAT = 1.0;
+    // Minimum objective WORLD warmth for recovery (MC 0–2 scale; plains ~0.8).
+    // With FEVER_LIGHT (+0.05) threshold = 0.80 — passable in plains; mild+ needs extra warmth.
+    private static final double MIN_WORLD_TEMP_TO_RECOVER = 0.75;
+    // Hot armor insulation (CS units) → MC WORLD-scale recovery bonus.
+    private static final double INSULATION_TO_WORLD = 0.01;
+    // Fallback without CS: warmth bonus per leather or goat-fur armor piece.
+    private static final double ARMOR_PIECE_WARMTH = 0.08;
+    // Accumulation gates (gate-only — rates are unaffected):
+    private static final double DAMP_COLD_THRESHOLD        = 1.0;
+    private static final double BODY_TEMP_ACCUMULATE_BELOW = 0.0;
+    private static final double WINDCHILL_CHILL            = 10.0;
 
-    // Lazily resolved (after registries load) then cached; null/empty if absent or ids missing.
     private static Item filledWaterskinItem;
     private static Set<Item> goatFurItems = Set.of();
     private static boolean itemsResolved;
@@ -86,7 +70,6 @@ public class ColdSweatCompat {
         itemsResolved = true;
     }
 
-    /** True if the player is carrying a Cold Sweat Filled Waterskin holding a hot (positive) temperature. */
     public static boolean hasHotWaterskin(ServerPlayer player) {
         if (!LOADED) return false;
         resolveItems();
@@ -111,7 +94,6 @@ public class ColdSweatCompat {
         return tag.getDouble(WATERSKIN_TEMP_KEY_ALT2);
     }
 
-    /** Max positive NBT temperature from carried filled waterskins (inventory + offhand). */
     public static double getHotWaterskinTemp(ServerPlayer player) {
         if (!LOADED) return 0.0;
         resolveItems();
@@ -128,7 +110,6 @@ public class ColdSweatCompat {
         return Math.max(max, player.getOffhandItem().is(filled) ? offhand : 0.0);
     }
 
-    /** Number of worn Cold Sweat goat-fur armor pieces (0–4). 0 without Cold Sweat. */
     public static int goatFurArmorPieces(ServerPlayer player) {
         if (!LOADED) return 0;
         resolveItems();
@@ -140,10 +121,6 @@ public class ColdSweatCompat {
         return count;
     }
 
-    /**
-     * Ambient world temperature in CS MC units — drives cold rate, drying, and recovery.
-     * Calibrated for the 0–2 biome scale (plains ~0.8, cold biome ~0.2).
-     */
     public static double getWorldTemp(ServerPlayer player) {
         if (LOADED) {
             return WorldHelper.getRoughTemperatureAt(player.level(), player.blockPosition(), 1);
@@ -153,19 +130,6 @@ public class ColdSweatCompat {
         return temp;
     }
 
-    /**
-     * Drying rate. Driven by the surrounding warmth (same world-temp scale): temp = 1.0 → 0.0015/tick
-     * (~11 min); 5.0 (campfire) → 0.0075 (~2.2 min); 10.0 (lava) → 0.015 (~1.1 min). Floors at
-     * 0.00015/tick so cold conditions still dry, slowly.
-     *
-     * <p>With Cold Sweat the warmth read is the full WORLD temperature ({@code Trait.WORLD}) — which folds
-     * in real heat sources (campfire/lava/furnace via {@code BlockTemp}) and excludes the player's
-     * insulation, so a fire dries you faster but wet armor does NOT (consistent with
-     * {@link #isColdEnoughForDamp}; the {@code worldTemp} arg = {@code getRoughTemperatureAt} omits block
-     * heat, which is why we read WORLD here instead). Without Cold Sweat there is no such model, so we fall
-     * back to the passed rough temp plus a block-light heat proxy. A carried hot waterskin adds heat either
-     * way.
-     */
     public static double getDryRate(ServerPlayer player) {
         double temp;
         if (LOADED) {
@@ -174,113 +138,101 @@ public class ColdSweatCompat {
             int blockLight = player.level().getBrightness(LightLayer.BLOCK, player.blockPosition());
             temp = getWorldTemp(player) + blockLight / 15.0;
         }
-        // A carried hot Filled Waterskin acts as a portable heat source, drying the player faster.
         if (hasHotWaterskin(player)) temp += WATERSKIN_DRY_HEAT;
         return Math.max(0.00015, temp * 0.0015);
     }
 
-    /**
-     * Cold accumulation rate while wet.
-     * worldTemp = 0.8 (plains) → 0.00006/tick (~14 min to Cold when Damp);
-     * 0.0 (cold biome) → 0.00030 (~2.8 min); -0.5 (snow) → 0.00045 (~1.8 min).
-     */
     public static double getColdRate(double worldTemp) {
         return Math.max(0.0, 1.0 - worldTemp) * 0.000300;
     }
 
     /**
-     * Whether the player is warm enough for a respiratory illness to recover this tick. With Cold Sweat
-     * this reads the player's full BODY temperature (−100…+100, 0 = comfortable), so anything that warms
-     * the player — a campfire, insulation, a hot waterskin — lets a cold recover even in a frozen biome,
-     * not just the raw biome ambient. Without Cold Sweat it falls back to the biome temp plus a block-
-     * light heat bonus (a nearby torch/campfire/lava raises it above freezing). This ONLY gates recovery
-     * on/off; the recovery RATE is a flat per-disease constant and is unaffected by how warm the player is.
+     * Objective environmental warmth for recovery — ambient WORLD (minus disease perception
+     * modifiers) plus insulation and hot-waterskin bonuses. Does not read BODY temperature.
      */
-    public static boolean isWarmEnoughToRecover(ServerPlayer player) {
-        double threshold = MIN_BODY_TEMP_TO_RECOVER + feverOffset(player);
+    public static double getObjectiveRecoveryWarmth(ServerPlayer player) {
         if (LOADED) {
-            return Temperature.get(player, Temperature.Trait.BODY) >= threshold;
+            double world = Temperature.get(player, Temperature.Trait.WORLD);
+            world -= DiseaseWorldTempHelper.perceptionOffset(player);
+            world += getInsulationWarmthBonus(player);
+            world += getHotWaterskinRecoveryBonus(player);
+            return world;
         }
         int blockLight = player.level().getBrightness(LightLayer.BLOCK, player.blockPosition());
-        // Non-CS fallback: scale fever offset into the biome+light score (CS BODY ±100 ≈ biome 0–2).
-        return getWorldTemp(player) + blockLight / 15.0 > threshold / 50.0;
+        double warmth = getWorldTemp(player) + blockLight / 15.0;
+        warmth += getInsulationWarmthBonus(player);
+        warmth += getHotWaterskinRecoveryBonus(player);
+        return warmth;
     }
 
-    // Septic shock applies BASE + RATE TempModifier penalties (see SepticShockTempModifier).
+    private static double getInsulationWarmthBonus(ServerPlayer player) {
+        if (LOADED) {
+            return DiseaseWorldTempHelper.readHotInsulation(player) * INSULATION_TO_WORLD;
+        }
+        return (leatherArmorPieces(player) + goatFurArmorPieces(player)) * ARMOR_PIECE_WARMTH;
+    }
+
+    private static int leatherArmorPieces(ServerPlayer player) {
+        int count = 0;
+        for (ItemStack stack : player.getArmorSlots()) {
+            if (stack.is(Items.LEATHER_HELMET) || stack.is(Items.LEATHER_CHESTPLATE)
+                    || stack.is(Items.LEATHER_LEGGINGS) || stack.is(Items.LEATHER_BOOTS)) count++;
+        }
+        return count;
+    }
+
+    private static double getHotWaterskinRecoveryBonus(ServerPlayer player) {
+        if (!hasHotWaterskin(player)) return 0.0;
+        if (LOADED) {
+            return Math.min(WATERSKIN_DRY_HEAT, getHotWaterskinTemp(player) * 0.01);
+        }
+        return WATERSKIN_DRY_HEAT;
+    }
+
+    /**
+     * Whether the player is warm enough for a respiratory illness to recover. Gates on objective
+     * WORLD warmth plus insulation/waterskin; fever raises the threshold without requiring elevated BODY.
+     */
+    public static boolean isWarmEnoughToRecover(ServerPlayer player) {
+        double threshold = MIN_WORLD_TEMP_TO_RECOVER + feverOffset(player);
+        return getObjectiveRecoveryWarmth(player) >= threshold;
+    }
+
+    private static final ResourceLocation FEVER_WORLD_MODIFIER_ID =
+            new ResourceLocation(SimpleDiseases.MOD_ID, "fever_world");
     private static final ResourceLocation SEPTIC_SHOCK_MODIFIER_ID =
             new ResourceLocation(SimpleDiseases.MOD_ID, "septic_shock");
-    private static final ResourceLocation SEPTIC_SHOCK_REWARM_MODIFIER_ID =
-            new ResourceLocation(SimpleDiseases.MOD_ID, "septic_shock_rewarm");
-    private static final Placement SEPTIC_SHOCK_BASE_PLACEMENT =
-            Placement.LAST.noDuplicates(Matcher.SAME_CLASS);
-    private static final Placement SEPTIC_SHOCK_RATE_PLACEMENT =
-            Placement.of(Mode.ADD_BEFORE, Order.FIRST, mod -> mod instanceof ArmorInsulationTempModifier)
-                    .noDuplicates(Matcher.SAME_CLASS)
-                    .orElse(Placement.LAST);
-    private static final Placement SEPTIC_SHOCK_REWARM_PLACEMENT =
-            Placement.of(Mode.ADD_AFTER, Order.LAST, mod -> mod instanceof ArmorInsulationTempModifier)
-                    .noDuplicates(Matcher.SAME_CLASS)
-                    .orElse(Placement.LAST);
-    private static final Placement CARRIED_WATERSKIN_PLACEMENT =
+    private static final Placement DISEASE_WORLD_PLACEMENT =
             Placement.LAST.noDuplicates(Matcher.SAME_CLASS);
 
     /**
-     * Ensures septic-shock BASE/RATE modifiers and carried hot-waterskin CORE warming are present
-     * while shock is active, and removed when cured. No-op without Cold Sweat.
+     * Ensures fever (+) and septic-shock (−) WORLD perception modifiers are present while active,
+     * and removed when cured. No-op without Cold Sweat.
      */
-    public static void syncSepticShockModifier(ServerPlayer player) {
+    public static void syncDiseaseWorldModifiers(ServerPlayer player) {
         if (!LOADED) return;
+        boolean hasFever = FeverWorldTempModifier.maxFeverOffset(player) > 0.0;
         boolean inShock = DiseaseEffects.hasSepticShock(player);
-        boolean hasBase = Temperature.hasModifier(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
-        boolean hasRate = Temperature.hasModifier(player, Temperature.Trait.RATE, SepticShockTempModifier.class);
-        boolean hasRewarm = Temperature.hasModifier(player, Temperature.Trait.RATE, SepticShockRewarmModifier.class);
-        if (inShock) {
-            if (!hasBase) {
-                Temperature.addModifier(player, createSepticShockModifier(), Temperature.Trait.BASE, SEPTIC_SHOCK_BASE_PLACEMENT);
-            }
-            if (!hasRate) {
-                Temperature.addModifier(player, createSepticShockModifier(), Temperature.Trait.RATE, SEPTIC_SHOCK_RATE_PLACEMENT);
-            }
-            if (!hasRewarm) {
-                Temperature.addModifier(player, createRewarmModifier(), Temperature.Trait.RATE, SEPTIC_SHOCK_REWARM_PLACEMENT);
-            }
-            syncCarriedHotWaterskin(player);
-        } else if (hasBase || hasRate || hasRewarm || hasCarriedWaterskinModifier(player)
-                || Temperature.hasModifier(player, Temperature.Trait.CORE, SepticShockTempModifier.class)) {
-            removeSepticShockModifiers(player);
+        boolean hasFeverMod = Temperature.hasModifier(player, Temperature.Trait.WORLD, FeverWorldTempModifier.class);
+        boolean hasShockMod = Temperature.hasModifier(player, Temperature.Trait.WORLD, SepticShockTempModifier.class);
+
+        if (hasFever && !hasFeverMod) {
+            Temperature.addModifier(player, createFeverWorldModifier(), Temperature.Trait.WORLD, DISEASE_WORLD_PLACEMENT);
+        } else if (!hasFever && hasFeverMod) {
+            Temperature.removeModifiers(player, Temperature.Trait.WORLD, FeverWorldTempModifier.class);
+        }
+
+        if (inShock && !hasShockMod) {
+            Temperature.addModifier(player, createSepticShockModifier(), Temperature.Trait.WORLD, DISEASE_WORLD_PLACEMENT);
+        } else if (!inShock && hasShockMod) {
+            Temperature.removeModifiers(player, Temperature.Trait.WORLD, SepticShockTempModifier.class);
         }
     }
 
-    private static void syncCarriedHotWaterskin(ServerPlayer player) {
-        removeCarriedWaterskinModifier(player);
-        double temp = getHotWaterskinTemp(player);
-        if (temp <= 0.0) return;
-        WaterskinTempModifier mod = new WaterskinTempModifier(temp * CARRIED_WATERSKIN_CORE_SCALE);
-        mod.getNBT().putBoolean(CARRIED_WATERSKIN_NBT_TAG, true);
-        mod.tickRate(5);
-        Temperature.addModifier(player, mod, Temperature.Trait.CORE, CARRIED_WATERSKIN_PLACEMENT);
-    }
-
-    private static boolean hasCarriedWaterskinModifier(ServerPlayer player) {
-        return Temperature.getModifiers(player, Temperature.Trait.CORE).stream()
-                .anyMatch(ColdSweatCompat::isCarriedWaterskinModifier);
-    }
-
-    private static boolean isCarriedWaterskinModifier(TempModifier mod) {
-        return mod instanceof WaterskinTempModifier
-                && mod.getNBT().getBoolean(CARRIED_WATERSKIN_NBT_TAG);
-    }
-
-    private static void removeCarriedWaterskinModifier(ServerPlayer player) {
-        Temperature.removeModifiers(player, Temperature.Trait.CORE, ColdSweatCompat::isCarriedWaterskinModifier);
-    }
-
-    private static void removeSepticShockModifiers(ServerPlayer player) {
-        Temperature.removeModifiers(player, Temperature.Trait.BASE, SepticShockTempModifier.class);
-        Temperature.removeModifiers(player, Temperature.Trait.RATE, SepticShockTempModifier.class);
-        Temperature.removeModifiers(player, Temperature.Trait.RATE, SepticShockRewarmModifier.class);
-        Temperature.removeModifiers(player, Temperature.Trait.CORE, SepticShockTempModifier.class);
-        removeCarriedWaterskinModifier(player);
+    private static FeverWorldTempModifier createFeverWorldModifier() {
+        return TempModifierRegistry.getValue(FEVER_WORLD_MODIFIER_ID)
+                .map(m -> (FeverWorldTempModifier) m)
+                .orElseGet(FeverWorldTempModifier::new);
     }
 
     private static SepticShockTempModifier createSepticShockModifier() {
@@ -289,43 +241,30 @@ public class ColdSweatCompat {
                 .orElseGet(SepticShockTempModifier::new);
     }
 
-    private static SepticShockRewarmModifier createRewarmModifier() {
-        return TempModifierRegistry.getValue(SEPTIC_SHOCK_REWARM_MODIFIER_ID)
-                .map(m -> (SepticShockRewarmModifier) m)
-                .orElseGet(SepticShockRewarmModifier::new);
-    }
-
-    /** Runs before CS {@code tickTemperature} so the shock modifier is present for that tick. */
+    /** Runs before CS {@code tickTemperature} so disease WORLD modifiers are present for that tick. */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void onLivingTickSyncSepticShock(LivingEvent.LivingTickEvent event) {
+    public static void onLivingTickSyncDiseaseWorld(LivingEvent.LivingTickEvent event) {
         if (event.getEntity().level().isClientSide) return;
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        syncSepticShockModifier(player);
+        syncDiseaseWorldModifiers(player);
     }
 
     @SubscribeEvent
     public static void onTempModifierRegister(TempModifierRegisterEvent event) {
+        event.register(FEVER_WORLD_MODIFIER_ID, FeverWorldTempModifier::new);
         event.register(SEPTIC_SHOCK_MODIFIER_ID, SepticShockTempModifier::new);
-        event.register(SEPTIC_SHOCK_REWARM_MODIFIER_ID, SepticShockRewarmModifier::new);
     }
 
-    // Bacterial recovery uses a fraction of the disease's fever offset as the warmth gate,
-    // keeping the requirement lower than viral recovery while still making severity matter.
     private static final double BACTERIAL_FEVER_GATE_SCALE = 0.5;
 
     /**
      * Whether the player is warm enough for a bacterial infection to recover. Like
      * {@link #isWarmEnoughToRecover} but the fever offset is scaled by
-     * {@code BACTERIAL_FEVER_GATE_SCALE}, so recovery is possible at a lower body temperature
-     * than the equivalent viral disease while still being harder to achieve at higher fever tiers.
+     * {@code BACTERIAL_FEVER_GATE_SCALE}.
      */
     public static boolean isWarmEnoughForBacterialRecovery(ServerPlayer player) {
-        double threshold = MIN_BODY_TEMP_TO_RECOVER + feverOffset(player) * BACTERIAL_FEVER_GATE_SCALE;
-        if (LOADED) {
-            return Temperature.get(player, Temperature.Trait.BODY) >= threshold;
-        }
-        int blockLight = player.level().getBrightness(LightLayer.BLOCK, player.blockPosition());
-        return getWorldTemp(player) + blockLight / 15.0 > threshold / 50.0;
+        double threshold = MIN_WORLD_TEMP_TO_RECOVER + feverOffset(player) * BACTERIAL_FEVER_GATE_SCALE;
+        return getObjectiveRecoveryWarmth(player) >= threshold;
     }
 
     private static double feverOffset(ServerPlayer player) {
@@ -339,17 +278,6 @@ public class ColdSweatCompat {
         return max;
     }
 
-    /**
-     * Whether a Damp player is in cold-enough conditions to accumulate illness. Dampness nullifies
-     * insulation entirely: the gate ignores the player's body temperature/insulation and looks only at the
-     * ambient they're exposed to. With Cold Sweat that ambient is CS's full WORLD temperature
-     * ({@code Trait.WORLD}) — which already folds in genuine heat sources (campfire/lava/furnace via
-     * {@code BlockTemp}, accurately, unlike a raw light level) and excludes the player's insulation, so a
-     * fire/warm biome still protects a soaked player but armor does not. Note the mod's {@code worldTemp}
-     * ({@code getRoughTemperatureAt}) is the rough biome temp WITHOUT block heat, which is why we read the
-     * full WORLD trait here instead. Without Cold Sweat there is no such model, so we fall back to the
-     * rough temp plus a block-light heat proxy (+ a carried hot waterskin). Gate only — RATE unaffected.
-     */
     public static boolean isColdEnoughForDamp(ServerPlayer player) {
         if (LOADED) {
             return Temperature.get(player, Temperature.Trait.WORLD) < DAMP_COLD_THRESHOLD;
@@ -359,13 +287,6 @@ public class ColdSweatCompat {
         return ambient < DAMP_COLD_THRESHOLD;
     }
 
-    /**
-     * Whether a windchilled (dry) player is cold enough to accumulate illness. Clothes are dry here, so
-     * insulation still protects: with Cold Sweat this gates on the player's CS BODY temperature (which
-     * already includes insulation) minus a windchill chill, below the comfort point — so a well-insulated
-     * or fire-warmed player resists windchill. Without Cold Sweat there is no body temp, and the windchill
-     * predicate already guarantees a cold context, so it simply passes (legacy behavior). Gate only.
-     */
     public static boolean isColdEnoughForWindchill(ServerPlayer player) {
         if (!LOADED) return true;
         return Temperature.get(player, Temperature.Trait.BODY) - WINDCHILL_CHILL < BODY_TEMP_ACCUMULATE_BELOW;

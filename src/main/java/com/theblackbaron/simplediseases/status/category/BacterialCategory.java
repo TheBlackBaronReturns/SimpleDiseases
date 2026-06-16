@@ -158,7 +158,7 @@ public final class BacterialCategory implements DiseaseCategory {
             player.addEffect(new MobEffectInstance(bdef.effectFor(severity).get(), -1, 0, false, false, true));
         }
         if (bdef.id().equals(DiseaseRegistry.SEPSIS_STAPH)) {
-            ColdSweatCompat.syncSepticShockModifier(player);
+            ColdSweatCompat.syncDiseaseWorldModifiers(player);
         }
 
         // Suppress episodes when a complication child has passed its first threshold.

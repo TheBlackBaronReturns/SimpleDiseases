@@ -15,30 +15,28 @@ import java.util.UUID;
  */
 public class DiseaseMobEffect extends MobEffect {
 
-    /** CS BODY units added to the recovery threshold for each fever level (used by DiseaseEffects). */
-    public static final double FEVER_LIGHT  =  5.0;
-    public static final double FEVER_MILD   = 10.0;
-    public static final double FEVER_HIGH   = 15.0;
-    public static final double FEVER_SEVERE = 20.0;
+    /** MC WORLD-scale units added to the recovery threshold and perceived ambient warmth for each fever level. */
+    public static final double FEVER_LIGHT  = 0.05;
+    public static final double FEVER_MILD   = 0.10;
+    public static final double FEVER_HIGH   = 0.15;
+    public static final double FEVER_SEVERE = 0.20;
 
-    /** CS BASE-trait hypothermia floor for septic shock (BODY = CORE + BASE; not a setpoint). */
-    public static final double SEPTIC_SHOCK_BASE_OFFSET = 38.0;
-    /** Extra cooling multiplier on negative RATE during shock (vasodilation / heat loss). */
-    public static final double SEPTIC_SHOCK_COOL_MULT = 1.25;
-    /** Pre-armor warming multiplier when CORE is below comfort (superseded post-armor by REWARM_MULT). */
-    public static final double SEPTIC_SHOCK_WARM_BOOST = 2.0;
-    /** Post-armor RATE multiplier applied after insulation during hypothermic rewarming. */
-    public static final double SEPTIC_SHOCK_REWARM_MULT = 2.75;
-    /** WORLD (MC scale) above default habitable max before BASE hypothermia floor begins easing. */
+    /** MC WORLD-scale ambient penalty applied during septic shock (magnitude; applied as a negative WORLD offset). */
+    public static final double SEPTIC_SHOCK_WORLD_OFFSET = 0.75;
+    /** WORLD (MC scale) above default habitable max before shock cold-perception begins easing. */
     public static final double SEPTIC_SHOCK_HEAT_RELIEF_THRESHOLD = 1.8;
-    /** CS units of BASE penalty removed per MC WORLD unit above {@link #SEPTIC_SHOCK_HEAT_RELIEF_THRESHOLD}. */
-    public static final double SEPTIC_SHOCK_HEAT_RELIEF_SCALE = 6.0;
-    /** Maximum fraction of {@link #SEPTIC_SHOCK_BASE_OFFSET} that environmental heat can relieve. */
+    /** WORLD units of shock penalty removed per MC WORLD unit above {@link #SEPTIC_SHOCK_HEAT_RELIEF_THRESHOLD}. */
+    public static final double SEPTIC_SHOCK_HEAT_RELIEF_SCALE = 0.20;
+    /** Maximum fraction of {@link #SEPTIC_SHOCK_WORLD_OFFSET} that environmental heat can relieve. */
     public static final double SEPTIC_SHOCK_MAX_HEAT_RELIEF_FRAC = 0.55;
 
-    /** @deprecated Use {@link #SEPTIC_SHOCK_BASE_OFFSET}. */
+    /** @deprecated Use {@link #SEPTIC_SHOCK_WORLD_OFFSET}. */
     @Deprecated
-    public static final double SEPTIC_SHOCK_STRENGTH = SEPTIC_SHOCK_BASE_OFFSET;
+    public static final double SEPTIC_SHOCK_BASE_OFFSET = SEPTIC_SHOCK_WORLD_OFFSET;
+
+    /** @deprecated Use {@link #SEPTIC_SHOCK_WORLD_OFFSET}. */
+    @Deprecated
+    public static final double SEPTIC_SHOCK_STRENGTH = SEPTIC_SHOCK_WORLD_OFFSET;
 
     private double feverOffset = 0.0;
     private double shockOffset = 0.0;
@@ -62,7 +60,7 @@ public class DiseaseMobEffect extends MobEffect {
         return this;
     }
 
-    /** Sets the CS BODY temperature offset required on top of the base threshold to recover; chainable. */
+    /** Sets the MC WORLD-scale fever offset (recovery threshold penalty + perceived warmth); chainable. */
     public DiseaseMobEffect fever(double offset) {
         this.feverOffset = offset;
         return this;
@@ -72,7 +70,7 @@ public class DiseaseMobEffect extends MobEffect {
         return feverOffset;
     }
 
-    /** Sets the septic shock BASE penalty in CS body units; chainable. Applied via {@link com.theblackbaron.simplediseases.compat.SepticShockTempModifier}. */
+    /** Sets the septic shock WORLD penalty magnitude; chainable. Applied via {@link com.theblackbaron.simplediseases.compat.SepticShockTempModifier}. */
     public DiseaseMobEffect shock(double offset) {
         this.shockOffset = offset;
         return this;

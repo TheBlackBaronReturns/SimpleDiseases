@@ -109,7 +109,7 @@ public class DiseaseEffects {
         ));
 
         // Staph sepsis — 4-tier. MILD/MODERATE have fever; SEVERE/DEBILITATING enter septic shock
-        // (body temperature is forced down toward hypothermia — fever is removed from SEVERE).
+        // (perceived WORLD temperature is lowered — fever is removed from SEVERE).
         List<BaseMod> sepsisMods = List.of(
             new BaseMod(() -> Attributes.MAX_HEALTH, "max_health", -2.0, AttributeModifier.Operation.ADDITION)
         );
@@ -119,8 +119,8 @@ public class DiseaseEffects {
                 Severity.MODERATE, DiseaseMobEffect.FEVER_HIGH
             ),
             Map.of(
-                Severity.SEVERE,       DiseaseMobEffect.SEPTIC_SHOCK_BASE_OFFSET,
-                Severity.DEBILITATING, DiseaseMobEffect.SEPTIC_SHOCK_BASE_OFFSET
+                Severity.SEVERE,       DiseaseMobEffect.SEPTIC_SHOCK_WORLD_OFFSET,
+                Severity.DEBILITATING, DiseaseMobEffect.SEPTIC_SHOCK_WORLD_OFFSET
             )
         );
 
