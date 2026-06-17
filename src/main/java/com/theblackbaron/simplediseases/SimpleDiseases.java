@@ -5,6 +5,7 @@ import com.theblackbaron.simplediseases.compat.ColdSweatCompat;
 import com.theblackbaron.simplediseases.event.CureEvents;
 import com.theblackbaron.simplediseases.event.DiseaseEvents;
 import com.theblackbaron.simplediseases.event.SymptomEvents;
+import com.theblackbaron.simplediseases.network.NetworkHandler;
 import com.theblackbaron.simplediseases.particle.DiseaseParticles;
 import com.theblackbaron.simplediseases.sound.DiseaseSounds;
 import com.theblackbaron.simplediseases.status.DiseaseAttributes;
@@ -32,6 +33,8 @@ public class SimpleDiseases {
         // Build the built-in disease definitions (cold + flu as viral rows). Effects are referenced
         // lazily, so this is safe before registries populate.
         DiseaseRegistry.bootstrap();
+
+        NetworkHandler.register();
 
         DiseaseEvents events = new DiseaseEvents();
         MinecraftForge.EVENT_BUS.register(events);

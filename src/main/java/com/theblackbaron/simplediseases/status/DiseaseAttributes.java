@@ -43,11 +43,21 @@ public final class DiseaseAttributes {
             () -> new RangedAttribute("attribute.simplediseases.disease_block_break_speed", 1.0, 0.0, 2.0)
                     .setSyncable(true));
 
+    /**
+     * Multiplied against jump velocity on {@code LivingJumpEvent}. Default 1.0; malaise applies
+     * MULTIPLY_TOTAL toward 0. 1.20.1 has no player {@code JUMP_STRENGTH} attribute.
+     */
+    public static final RegistryObject<Attribute> JUMP_FACTOR = ATTRIBUTES.register(
+            "disease_jump_factor",
+            () -> new RangedAttribute("attribute.simplediseases.disease_jump_factor", 1.0, 0.0, 2.0)
+                    .setSyncable(true));
+
     private DiseaseAttributes() {}
 
     public static void onAttributeModification(EntityAttributeModificationEvent event) {
         event.add(EntityType.PLAYER, MAX_SATURATION.get());
         event.add(EntityType.PLAYER, KNOCKBACK_FACTOR.get());
         event.add(EntityType.PLAYER, BLOCK_BREAK_SPEED.get());
+        event.add(EntityType.PLAYER, JUMP_FACTOR.get());
     }
 }

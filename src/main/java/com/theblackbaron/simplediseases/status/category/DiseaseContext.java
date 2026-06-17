@@ -19,7 +19,7 @@ import java.util.Set;
  */
 public record DiseaseContext(
     ServerPlayer              player,
-    String                    suppressedGroup,
+    Set<String>               suppressedRecoveryGroups,
     String                    complicationWorseningGroup,
     long                      gameTime,
     LingeringNorovirusManager lingering,
@@ -27,7 +27,7 @@ public record DiseaseContext(
     Set<ResourceLocation>     suppressedEpisodeSources
 ) {
     public boolean suppressRecovery(String exclusionGroup) {
-        return suppressedGroup != null && suppressedGroup.equals(exclusionGroup);
+        return suppressedRecoveryGroups.contains(exclusionGroup);
     }
 
     public boolean worsensComplication(String exclusionGroup) {

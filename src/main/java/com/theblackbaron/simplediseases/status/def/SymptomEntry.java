@@ -20,46 +20,52 @@ import java.util.function.Supplier;
  * severe/debilitating flu, not guaranteed. The default {@link Severity#LIGHT} means "always eligible".
  *
  * <p>{@code amplifier} sets a fixed MobEffect amplifier (0-based). Ignored when {@code severityAmp}
- * is true (which instead scales the amplifier by illness tier). Useful for symptoms that should always
- * fire at a specific tier (e.g. sharp pain at amp 2 = tier 3 for sepsis).
+ * or {@code feverAmp} is true. {@code severityAmp} scales by illness tier; {@code feverAmp} scales by
+ * the active disease effect's fever/shock offset (malaise).
  */
 public record SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Optional<Supplier<SoundEvent>> sound,
-                           Severity minSeverity, Optional<Integer> durationTicks, boolean severityAmp, int amplifier) {
+                           Severity minSeverity, Optional<Integer> durationTicks, boolean severityAmp, int amplifier,
+                           boolean feverAmp) {
 
     /** No side effect, no sound, always eligible, config-paced. */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action) {
-        this(effect, action, Optional.empty(), Severity.LIGHT, Optional.empty(), false, 0);
+        this(effect, action, Optional.empty(), Severity.LIGHT, Optional.empty(), false, 0, false);
     }
 
     /** No sound, always eligible, with a fixed side-effect duration (e.g. headache's ~10 s nausea burst). */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, int durationTicks) {
-        this(effect, action, Optional.empty(), Severity.LIGHT, Optional.of(durationTicks), false, 0);
+        this(effect, action, Optional.empty(), Severity.LIGHT, Optional.of(durationTicks), false, 0, false);
     }
 
     /** With an onset sound, always eligible, config-paced. */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound) {
-        this(effect, action, Optional.of(sound), Severity.LIGHT, Optional.empty(), false, 0);
+        this(effect, action, Optional.of(sound), Severity.LIGHT, Optional.empty(), false, 0, false);
     }
 
     /** No sound, config-paced, with a minimum-severity gate (e.g. dehydration on moderate+ illness). */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Severity minSeverity) {
-        this(effect, action, Optional.empty(), minSeverity, Optional.empty(), false, 0);
+        this(effect, action, Optional.empty(), minSeverity, Optional.empty(), false, 0, false);
     }
 
     /** With an onset sound and a minimum-severity gate, config-paced. */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound, Severity minSeverity) {
-        this(effect, action, Optional.of(sound), minSeverity, Optional.empty(), false, 0);
+        this(effect, action, Optional.of(sound), minSeverity, Optional.empty(), false, 0, false);
     }
 
     /** With an onset sound, a min-severity gate, and a fixed side-effect duration. For symptoms whose
      *  marker icon spans the full episode but whose impact is a brief burst (e.g. shortness of breath). */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound, Severity minSeverity, int durationTicks) {
-        this(effect, action, Optional.of(sound), minSeverity, Optional.of(durationTicks), false, 0);
+        this(effect, action, Optional.of(sound), minSeverity, Optional.of(durationTicks), false, 0, false);
     }
 
     /** No sound, always eligible, config-paced, with tier-scaled amplifier. Effect amp = severity - MILD (clamped ≥ 0). */
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, boolean severityAmp) {
-        this(effect, action, Optional.empty(), Severity.LIGHT, Optional.empty(), severityAmp, 0);
+        this(effect, action, Optional.empty(), Severity.LIGHT, Optional.empty(), severityAmp, 0, false);
+    }
+
+    /** No sound, always eligible, config-paced, with amplifier scaled from disease fever/shock tier. */
+    public static SymptomEntry withFeverAmp(Supplier<MobEffect> effect, SymptomAction action) {
+        return new SymptomEntry(effect, action, Optional.empty(), Severity.LIGHT, Optional.empty(), false, 0, true);
     }
 
     public static final Codec<SymptomEntry> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -69,6 +75,7 @@ public record SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Opt
         Severity.CODEC.optionalFieldOf("min_severity", Severity.LIGHT).forGetter(SymptomEntry::minSeverity),
         Codec.INT.optionalFieldOf("duration_ticks").forGetter(SymptomEntry::durationTicks),
         Codec.BOOL.optionalFieldOf("severity_amp", false).forGetter(SymptomEntry::severityAmp),
-        Codec.INT.optionalFieldOf("amplifier", 0).forGetter(SymptomEntry::amplifier)
+        Codec.INT.optionalFieldOf("amplifier", 0).forGetter(SymptomEntry::amplifier),
+        Codec.BOOL.optionalFieldOf("fever_amp", false).forGetter(SymptomEntry::feverAmp)
     ).apply(i, SymptomEntry::new));
 }

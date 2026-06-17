@@ -1,5 +1,7 @@
 package com.theblackbaron.simplediseases.status;
 
+import com.theblackbaron.simplediseases.network.NetworkHandler;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.LivingEntity;
@@ -16,6 +18,9 @@ public class BleedingEffect extends MobEffect {
         if (amplifier <= 0 || entity.level().isClientSide || entity.isInvulnerable()) return;
         int interval = damageInterval(amplifier);
         if (entity.level().getGameTime() % interval == 0L) {
+            if (entity instanceof ServerPlayer player) {
+                NetworkHandler.sendBleedingSplatter(player, 3);
+            }
             entity.hurt(entity.damageSources().magic(), DAMAGE_PER_HIT);
         }
     }

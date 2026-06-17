@@ -1,8 +1,9 @@
 package com.theblackbaron.simplediseases.client;
 
-import com.theblackbaron.simplediseases.SimpleDiseases;
 import com.theblackbaron.simplediseases.particle.DiseaseParticles;
+import com.theblackbaron.simplediseases.SimpleDiseases;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -15,5 +16,13 @@ public class ClientModEvents {
         event.registerSpriteSet(DiseaseParticles.FLU.get(), FluParticle.Provider::new);
         event.registerSpriteSet(DiseaseParticles.RSV.get(), RsvParticle.Provider::new);
         event.registerSpriteSet(DiseaseParticles.NOROVIRUS.get(), NorovirusParticle.Provider::new);
+        event.registerSpriteSet(DiseaseParticles.BLEEDING.get(), BleedingParticle.Provider::new);
+        event.registerSpriteSet(DiseaseParticles.VOMIT.get(), VomitParticle.Provider::new);
+    }
+
+    @SubscribeEvent
+    public static void registerOverlays(RegisterGuiOverlaysEvent event) {
+        event.registerAboveAll("bleeding",
+                (gui, graphics, partialTick, width, height) -> BleedingHudOverlay.render(graphics, partialTick, width, height));
     }
 }

@@ -1,6 +1,7 @@
 package com.theblackbaron.simplediseases.status.service;
 
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
+import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
 import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.def.SymptomAction;
@@ -40,7 +41,8 @@ public final class SymptomService {
      * while a severe one merely has the chance to — selection stays random. The tier is rolled at the
      * first threshold (see ViralCategory), so it's available here before any symptom is chosen.
      */
-    public static SymptomEntry syncPool(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config, double progress, Severity severity) {
+    public static SymptomEntry syncPool(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
+                                        double progress, Severity severity, MobEffect diseaseEffectForAmp) {
         int addedBit = -1;
         if (progress <= 0.0) {
             pool.clearAll();
@@ -76,7 +78,7 @@ public final class SymptomService {
             }
         }
         if (addedBit >= 0 && !player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) {
-            return fire(player, config, addedBit, severity);
+            return fire(player, config, addedBit, severity, diseaseEffectForAmp);
         }
         return null;
     }
@@ -105,7 +107,8 @@ public final class SymptomService {
      * is scheduled one interval out from latch. TREATMENT_APPLIED cancels the active episode and holds
      * the timer so nothing fires the instant it expires.
      */
-    public static SymptomEntry tickEpisodes(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config, long gameTime, Severity severity) {
+    public static SymptomEntry tickEpisodes(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
+                                            long gameTime, Severity severity, MobEffect diseaseEffectForAmp) {
         // A treatment reduction during recovery may have dropped the tier below a pooled symptom's
         // gate — drop it so a now-too-severe symptom stops being picked for episodes.
         pruneIneligible(player, pool, config, severity);
@@ -130,7 +133,7 @@ public final class SymptomService {
         int bits = config.symptomBits();
         for (int b = 0; b < bits; b++) {
             if (pool.has(b)) {
-                if (pick == 0) { fired = fire(player, config, b, severity); break; }
+                if (pick == 0) { fired = fire(player, config, b, severity, diseaseEffectForAmp); break; }
                 pick--;
             }
         }
@@ -168,7 +171,8 @@ public final class SymptomService {
         }
     }
 
-    private static SymptomEntry fire(ServerPlayer player, SymptomConfig config, int bit, Severity severity) {
+    private static SymptomEntry fire(ServerPlayer player, SymptomConfig config, int bit, Severity severity,
+                                     MobEffect diseaseEffectForAmp) {
         SymptomEntry entry = config.pool().get(bit);
         // The symptom's marker effect (the HUD icon) always lasts a full tier-scaled episode, like the
         // other symptoms. Its impactful side effect (nausea, the breathless slow) runs for a shorter
@@ -176,7 +180,15 @@ public final class SymptomService {
         int episodeDuration = randomTicks(player.getRandom(),
                 severity.scaleDuration(config.minDurationTicks()),
                 severity.scaleDuration(config.maxDurationTicks()));
-        int amp = entry.severityAmp() ? Math.max(0, severity.ordinal() - Severity.MILD.ordinal()) : entry.amplifier();
+        int amp;
+        if (entry.feverAmp()) {
+            amp = diseaseEffectForAmp instanceof DiseaseMobEffect dme
+                    ? DiseaseMobEffect.malaiseAmplifierFrom(dme) : 0;
+        } else if (entry.severityAmp()) {
+            amp = Math.max(0, severity.ordinal() - Severity.MILD.ordinal());
+        } else {
+            amp = entry.amplifier();
+        }
         player.addEffect(new MobEffectInstance(entry.effect().get(), episodeDuration, amp, false, false, true));
         int impactDuration = entry.durationTicks().orElse(episodeDuration);
         applyAction(player, entry.action(), impactDuration);

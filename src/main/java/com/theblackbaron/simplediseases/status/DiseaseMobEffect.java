@@ -79,4 +79,14 @@ public class DiseaseMobEffect extends MobEffect {
     public double getShockOffset() {
         return shockOffset;
     }
+
+    /** Maps disease fever/shock tier to malaise MobEffect amplifier (display levels 1–4 → amp 0–3). */
+    public static int malaiseAmplifierFrom(DiseaseMobEffect effect) {
+        if (effect.getShockOffset() > 0) return 3;
+        double f = effect.getFeverOffset();
+        if (f >= FEVER_SEVERE) return 3;
+        if (f >= FEVER_HIGH)   return 2;
+        if (f >= FEVER_MILD)   return 1;
+        return 0;
+    }
 }

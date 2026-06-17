@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -108,5 +109,19 @@ public class SymptomEvents {
         double factor = attr.getValue();
         if (factor >= 1.0) return;
         event.setStrength(event.getStrength() * (float) factor);
+    }
+
+    /**
+     * Applies DISEASE_JUMP_FACTOR: scales jump velocity by the attribute value. 1.20.1 has no player
+     * jump-strength attribute, so malaise debuffs jump via this custom factor on LivingJumpEvent.
+     */
+    @SubscribeEvent
+    public void onJump(LivingEvent.LivingJumpEvent event) {
+        LivingEntity entity = event.getEntity();
+        AttributeInstance attr = entity.getAttribute(DiseaseAttributes.JUMP_FACTOR.get());
+        if (attr == null) return;
+        double factor = attr.getValue();
+        if (factor >= 1.0) return;
+        entity.setDeltaMovement(entity.getDeltaMovement().multiply(1.0, factor, 1.0));
     }
 }

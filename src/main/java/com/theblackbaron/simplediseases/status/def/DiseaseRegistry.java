@@ -49,7 +49,7 @@ public final class DiseaseRegistry {
                 List.of(
                     new SymptomEntry(DiseaseEffects.COUGH,    SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
                     new SymptomEntry(DiseaseEffects.SNEEZING, SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
-                    new SymptomEntry(DiseaseEffects.MALAISE,  SymptomAction.NONE)
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE)
                 ),
                 List.of(0.10, 0.40, 0.70),
                 20 * 120, 20 * 300, 20 * 30, 20 * 60
@@ -67,7 +67,7 @@ public final class DiseaseRegistry {
                 List.of(
                     new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE,       () -> DiseaseSounds.COUGH.get()),
                     new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE,       () -> DiseaseSounds.SNEEZE.get()),
-                    new SymptomEntry(DiseaseEffects.MALAISE,     SymptomAction.NONE),
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get(), Severity.SEVERE),
@@ -89,7 +89,7 @@ public final class DiseaseRegistry {
                 List.of(
                     new SymptomEntry(DiseaseEffects.COUGH,    SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
                     new SymptomEntry(DiseaseEffects.SNEEZING, SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
-                    new SymptomEntry(DiseaseEffects.MALAISE,  SymptomAction.NONE)
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE)
                 ),
                 List.of(0.10, 0.40, 0.70),
                 20 * 90, 20 * 210, 20 * 40, 20 * 80
@@ -105,7 +105,7 @@ public final class DiseaseRegistry {
             2.0, 1.0, 0.00006, 6000L,
             new SymptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.MALAISE,        SymptomAction.NONE),
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.HEADACHE,       SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.VOMITING,       SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get()),
                     new SymptomEntry(DiseaseEffects.DIARRHEA,       SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.DIARRHEA.get()),
@@ -129,7 +129,7 @@ public final class DiseaseRegistry {
                     new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,  () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.LIGHT, 200),
                     new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE,       () -> DiseaseSounds.COUGH.get()),
                     new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE,       () -> DiseaseSounds.SNEEZE.get()),
-                    new SymptomEntry(DiseaseEffects.MALAISE,     SymptomAction.NONE),
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get())
@@ -155,7 +155,7 @@ public final class DiseaseRegistry {
                     new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS, () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.LIGHT, 200),
                     new SymptomEntry(DiseaseEffects.COUGH,               SymptomAction.NONE,       () -> DiseaseSounds.COUGH.get(), Severity.LIGHT),
                     new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE,       () -> DiseaseSounds.SNEEZE.get()),
-                    new SymptomEntry(DiseaseEffects.MALAISE,     SymptomAction.NONE),
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get())
@@ -182,8 +182,9 @@ public final class DiseaseRegistry {
             List.of(4.0 / 3.0, 5.0 / 3.0),
             new SymptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.SHARP_PAIN,        SymptomAction.NONE, true),
-                    new SymptomEntry(DiseaseEffects.MALAISE,           SymptomAction.NONE),
+                    new SymptomEntry(DiseaseEffects.SHARP_PAIN, SymptomAction.NONE,
+                            Optional.empty(), Severity.LIGHT, Optional.empty(), false, 1, false),
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.LOCALIZED_REDNESS, SymptomAction.NONE)
                 ),
                 List.of(0.1, 0.4, 0.7),
@@ -201,8 +202,8 @@ public final class DiseaseRegistry {
             new SymptomConfig(
                 List.of(
                     new SymptomEntry(DiseaseEffects.HYPOTENSION,    SymptomAction.BREATHLESS,  () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.LIGHT, 200),
-                    new SymptomEntry(DiseaseEffects.SHARP_PAIN,     SymptomAction.NONE,        Optional.empty(), Severity.LIGHT, Optional.empty(), false, 2),
-                    new SymptomEntry(DiseaseEffects.MALAISE,        SymptomAction.NONE),
+                    new SymptomEntry(DiseaseEffects.SHARP_PAIN,     SymptomAction.NONE,        Optional.empty(), Severity.LIGHT, Optional.empty(), false, 2, false),
+                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.MOTTLED_SKIN,   SymptomAction.NONE,        Severity.MODERATE)
                 ),
                 List.of(0.1, 0.4, 0.7),

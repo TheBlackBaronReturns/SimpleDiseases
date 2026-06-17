@@ -1,13 +1,20 @@
 package com.theblackbaron.simplediseases.status.manager;
 
+import com.theblackbaron.simplediseases.particle.DiseaseParticleEmitter;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.horse.Llama;
+import net.minecraft.world.entity.monster.Spider;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.ThrownTrident;
@@ -27,9 +34,11 @@ public final class InjuryManager {
     private static final double[] BLEEDING_CHANCE      = {0.10, 0.08, 0.05, 0.01};
     private static final double[] BLEEDING_AMOUNT      = {2.5,  1.5,  1.0,  0.5 };
 
-    private static final double FLESH_WOUND_CHANCE     = 0.10;
+    private static final double[] FLESH_WOUND_CHANCE   = {0.10, 0.07, 0.04, 0.02};
     private static final float  MIN_FLESH_WOUND_DAMAGE = 4.0F;
-    private static final int    MAX_FLESH_WOUND_ARMOR  = 7;
+    private static final int    HEAVY_ARMOR_THRESHOLD    = 7;
+    private static final double HEAVY_WEAPON_BONUS_BASE  = 0.05;
+    private static final double HEAVY_WEAPON_BONUS_EXTRA = 0.03;
 
     private static final double INTERNAL_BLEEDING_DAMAGE_SCALE = 7.5 / 20.0;
     private static final double INTERNAL_BLEEDING_CHANCE       = 0.15;
@@ -40,21 +49,25 @@ public final class InjuryManager {
     private static final int    INJURY_EFFECT_DURATION_TICKS   = 20 * 40;
     private static final int    WOUND_EFFECT_DURATION_TICKS    = MobEffectInstance.INFINITE_DURATION;
 
+    private static final int PAIN_EPISODE_MIN_INTERVAL = 45 * 20;
+    private static final int PAIN_EPISODE_MAX_INTERVAL = 90 * 20;
+    private static final int PAIN_DURATION_MIN         = 20 * 20;
+    private static final int PAIN_DURATION_MAX         = 40 * 20;
+
+    private static final double LIGHT_BLEEDING_AMOUNT = 1.0;
+    private static final int    CACTUS_BLEED_COOLDOWN = 20;
+
     // Per-second (per-20-tick) infection seeding chance by flesh-wound severity phase [sev0, sev1, sev2].
-    // Each phase lasts 150 s; values are solved so cumulative P across the full wound matches targets.
-    // Boosted  → ~5 / ~10 / ~17%  (kept from original tuning)
-    // Normal   → ~20 / ~35 / ~45%
-    // Deficient→ ~35 / ~45 / ~60%
     private static final double[] INFECTION_CHANCE_BOOSTED   = {0.000342, 0.000351, 0.000496};
     private static final double[] INFECTION_CHANCE_NORMAL    = {0.001487, 0.001383, 0.001113};
     private static final double[] INFECTION_CHANCE_DEFICIENT = {0.002868, 0.001113, 0.002121};
-    // Seed uniformly in [0, 0.5]: with accumulationRate 1/4800, this gives a 2–4 min wound-open window
-    // to latch (seed=0 → 4 min, seed=0.5 → 2 min). Sev0 wounds (2.5 min) can outrun slower seeds.
     private static final double INFECTION_SEED_MIN = 0.0;
     private static final double INFECTION_SEED_MAX = 0.5;
 
     public void tick(ServerPlayer player, PlayerDiseaseState state) {
         PlayerInjuryState injury = state.injury();
+        long gameTime = player.level().getGameTime();
+
         if (!injury.hasActiveInjury()) {
             clearWoundEffects(player);
             return;
@@ -64,7 +77,12 @@ public final class InjuryManager {
 
         double bleeding = injury.bleeding();
         if (bleeding > 0.5) {
+            MobEffectInstance bleedingEffect = player.getEffect(DiseaseEffects.BLEEDING.get());
+            int amp = bleedingEffect != null ? bleedingEffect.getAmplifier() : 0;
             setWoundEffect(player, DiseaseEffects.BLEEDING.get(), Mth.clamp((int) (bleeding - 0.5), 0, 3));
+            if (player.hasEffect(DiseaseEffects.BLEEDING.get())) {
+                DiseaseParticleEmitter.emitBleeding(player, injury, amp, gameTime);
+            }
         } else {
             player.removeEffect(DiseaseEffects.BLEEDING.get());
         }
@@ -78,7 +96,6 @@ public final class InjuryManager {
 
         int woundSeverity = injury.fleshWoundSeverity();
 
-        long gameTime = player.level().getGameTime();
         if (woundSeverity >= 0 && gameTime % 20 == 0
                 && state.progress(DiseaseRegistry.CELLULITIS_STAPH) <= 0.0
                 && !state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) {
@@ -91,6 +108,7 @@ public final class InjuryManager {
 
         if (woundSeverity >= 0 && !state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) {
             setWoundEffect(player, DiseaseEffects.FLESH_WOUND.get(), woundSeverity);
+            tickFleshWoundPain(player, injury, state, gameTime);
         } else {
             player.removeEffect(DiseaseEffects.FLESH_WOUND.get());
         }
@@ -100,15 +118,171 @@ public final class InjuryManager {
         }
     }
 
+    public void onPlayerDamaged(ServerPlayer player, PlayerDiseaseState state, DamageSource source, float finalDamage) {
+        if (finalDamage <= 0.0F || player.isCreative() || player.isSpectator()) return;
+
+        PlayerInjuryState injury = state.injury();
+
+        if (isCactusDamage(source)) {
+            long gameTime = player.level().getGameTime();
+            if (gameTime - injury.lastCactusBleedTick() >= CACTUS_BLEED_COOLDOWN) {
+                injury.setLastCactusBleedTick(gameTime);
+                injury.addBleeding(LIGHT_BLEEDING_AMOUNT);
+            }
+        }
+
+        tryMobBiteBleeding(injury, source, player.getRandom());
+
+        if (isBleedingDamage(source)) {
+            float minBleedingDamage = isSharpMobMelee(source) ? MIN_FLESH_WOUND_DAMAGE : MIN_BLEEDING_DAMAGE;
+            if (finalDamage >= minBleedingDamage) {
+                int tier = bleedingArmorTier(player.getArmorValue());
+                if (player.getRandom().nextDouble() < BLEEDING_CHANCE[tier]) {
+                    injury.addBleeding(BLEEDING_AMOUNT[tier]);
+                }
+            }
+        }
+
+        tryFleshWound(player, injury, state, source, finalDamage);
+
+        if (isInternalBleedingDamage(source)
+                && finalDamage >= MIN_INTERNAL_BLEEDING_DAMAGE
+                && player.getRandom().nextDouble() < INTERNAL_BLEEDING_CHANCE) {
+            double armorFactor = Math.max(0.85, 1.0 - player.getArmorValue() * 0.0075);
+            injury.addInternalBleeding(finalDamage * INTERNAL_BLEEDING_DAMAGE_SCALE * armorFactor);
+        }
+    }
+
+    public void onGlassBrokenBareHand(ServerPlayer player, PlayerDiseaseState state) {
+        if (player.isCreative() || player.isSpectator()) return;
+        if (!player.getMainHandItem().isEmpty()) return;
+        state.injury().addBleeding(LIGHT_BLEEDING_AMOUNT);
+    }
+
+    private void tickFleshWoundPain(ServerPlayer player, PlayerInjuryState injury,
+                                    PlayerDiseaseState state, long gameTime) {
+        if (state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) return;
+        if (player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) return;
+
+        RandomSource random = player.getRandom();
+        if (injury.nextPainEpisodeAt() == 0L) {
+            injury.setNextPainEpisodeAt(gameTime + randomBetween(random, PAIN_EPISODE_MIN_INTERVAL, PAIN_EPISODE_MAX_INTERVAL));
+            return;
+        }
+
+        if (gameTime >= injury.nextPainEpisodeAt()) {
+            int duration = randomBetween(random, PAIN_DURATION_MIN, PAIN_DURATION_MAX);
+            player.addEffect(new MobEffectInstance(DiseaseEffects.SHARP_PAIN.get(), duration, 0, false, false, true));
+            injury.setNextPainEpisodeAt(gameTime + randomBetween(random, PAIN_EPISODE_MIN_INTERVAL, PAIN_EPISODE_MAX_INTERVAL));
+        }
+    }
+
+    private static boolean tryFleshWound(ServerPlayer player, PlayerInjuryState injury,
+                                         PlayerDiseaseState state, DamageSource source, float finalDamage) {
+        if (finalDamage < MIN_FLESH_WOUND_DAMAGE || !isLaceratingDamage(source)) return false;
+
+        RandomSource random = player.getRandom();
+        int armor = player.getArmorValue();
+        int tier = effectiveArmorTier(armor, finalDamage);
+        long gameTime = player.level().getGameTime();
+
+        if (random.nextDouble() < FLESH_WOUND_CHANCE[tier]) {
+            applyFleshWound(player, injury, state, finalDamage, gameTime);
+            return true;
+        }
+
+        if (armor > HEAVY_ARMOR_THRESHOLD) {
+            double bonusChance = HEAVY_WEAPON_BONUS_BASE;
+            if (finalDamage >= 8.0F) bonusChance += HEAVY_WEAPON_BONUS_EXTRA;
+
+            ItemStack weapon = getAttackerWeapon(source);
+            if (weapon.getItem() instanceof AxeItem && random.nextDouble() < bonusChance) {
+                applyFleshWound(player, injury, state, finalDamage, gameTime);
+                return true;
+            }
+            if (isCrossbowProjectile(source) && random.nextDouble() < bonusChance) {
+                applyFleshWound(player, injury, state, finalDamage, gameTime);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void applyFleshWound(ServerPlayer player, PlayerInjuryState injury,
+                                        PlayerDiseaseState state, float finalDamage, long gameTime) {
+        int severity = fleshWoundSeverity(finalDamage);
+        injury.addFleshWound(severity);
+        injury.addBleeding(fleshWoundBleedingBonus(severity));
+        fireFleshWoundPainEpisode(player, injury, state, gameTime);
+    }
+
+    private static void fireFleshWoundPainEpisode(ServerPlayer player, PlayerInjuryState injury,
+                                                  PlayerDiseaseState state, long gameTime) {
+        if (state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) return;
+        if (player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) return;
+
+        RandomSource random = player.getRandom();
+        int duration = randomBetween(random, PAIN_DURATION_MIN, PAIN_DURATION_MAX);
+        player.addEffect(new MobEffectInstance(DiseaseEffects.SHARP_PAIN.get(), duration, 0, false, false, true));
+        injury.setNextPainEpisodeAt(gameTime + randomBetween(random, PAIN_EPISODE_MIN_INTERVAL, PAIN_EPISODE_MAX_INTERVAL));
+    }
+
+    private static int effectiveArmorTier(int armor, float finalDamage) {
+        int tier = bleedingArmorTier(armor);
+        if (finalDamage >= 12.0F) tier = Math.max(0, tier - 2);
+        else if (finalDamage >= 8.0F) tier = Math.max(0, tier - 1);
+        return tier;
+    }
+
+    private static ItemStack getAttackerWeapon(DamageSource source) {
+        Entity direct = source.getDirectEntity();
+        if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return ItemStack.EMPTY;
+        Entity attacker = source.getEntity();
+        if (attacker instanceof Player player) return player.getMainHandItem();
+        if (attacker instanceof LivingEntity living) return living.getMainHandItem();
+        return ItemStack.EMPTY;
+    }
+
+    private static void tryMobBiteBleeding(PlayerInjuryState injury, DamageSource source, RandomSource random) {
+        if (!isMobBiteDamage(source)) return;
+        if (random.nextDouble() < 0.5) {
+            injury.addBleeding(LIGHT_BLEEDING_AMOUNT);
+        }
+    }
+
+    private static boolean isMobBiteDamage(DamageSource source) {
+        if (source == null || source.isIndirect()) return false;
+        Entity attacker = source.getEntity();
+        if (attacker instanceof Llama) return false;
+        return attacker instanceof Zombie || attacker instanceof Spider || attacker instanceof Animal;
+    }
+
+    private static boolean isSharpMobMelee(DamageSource source) {
+        if (source == null || source.isIndirect()) return false;
+        Entity attacker = source.getEntity();
+        if (!(attacker instanceof LivingEntity living) || attacker instanceof Player) return false;
+        return isSharp(living.getMainHandItem());
+    }
+
+    private static boolean isCrossbowProjectile(DamageSource source) {
+        Entity direct = source.getDirectEntity();
+        return direct instanceof AbstractArrow arrow && arrow.shotFromCrossbow();
+    }
+
+    private static boolean isCactusDamage(DamageSource source) {
+        return source != null && "cactus".equals(source.getMsgId());
+    }
+
+    private static int randomBetween(RandomSource random, int min, int max) {
+        return min + random.nextInt(max - min + 1);
+    }
+
     private static double[] infectionRates(ServerPlayer player) {
         if (player.hasEffect(DiseaseEffects.IMMUNE.get()))            return INFECTION_CHANCE_BOOSTED;
         if (player.hasEffect(DiseaseEffects.IMMUNE_DEFICIENCY.get())) return INFECTION_CHANCE_DEFICIENT;
         return INFECTION_CHANCE_NORMAL;
     }
 
-    // Removes and re-adds the effect when the amplifier has changed, keeping it INFINITE_DURATION.
-    // Plain addEffect() won't downgrade an existing higher-amplifier infinite effect, so the HUD
-    // would otherwise stay stuck at the old (higher) tier.
     private static void setWoundEffect(ServerPlayer player, MobEffect effect, int amp) {
         MobEffectInstance cur = player.getEffect(effect);
         if (cur != null && cur.getAmplifier() == amp) return;
@@ -120,36 +294,6 @@ public final class InjuryManager {
         player.removeEffect(DiseaseEffects.BLEEDING.get());
         player.removeEffect(DiseaseEffects.INTERNAL_BLEEDING.get());
         player.removeEffect(DiseaseEffects.FLESH_WOUND.get());
-    }
-
-    public void onPlayerDamaged(ServerPlayer player, PlayerDiseaseState state, DamageSource source, float finalDamage) {
-        if (finalDamage <= 0.0F || player.isCreative() || player.isSpectator()) return;
-
-        PlayerInjuryState injury = state.injury();
-
-        if (isBleedingDamage(source)) {
-            if (finalDamage >= MIN_BLEEDING_DAMAGE) {
-                int tier = bleedingArmorTier(player.getArmorValue());
-                if (player.getRandom().nextDouble() < BLEEDING_CHANCE[tier]) {
-                    injury.addBleeding(BLEEDING_AMOUNT[tier]);
-                }
-            }
-            if (finalDamage >= MIN_FLESH_WOUND_DAMAGE
-                    && player.getArmorValue() <= MAX_FLESH_WOUND_ARMOR
-                    && isLaceratingDamage(source)
-                    && player.getRandom().nextDouble() < FLESH_WOUND_CHANCE) {
-                int severity = fleshWoundSeverity(finalDamage);
-                injury.addFleshWound(severity);
-                injury.addBleeding(fleshWoundBleedingBonus(severity));
-            }
-        }
-
-        if (isInternalBleedingDamage(source)
-                && finalDamage >= MIN_INTERNAL_BLEEDING_DAMAGE
-                && player.getRandom().nextDouble() < INTERNAL_BLEEDING_CHANCE) {
-            double armorFactor = Math.max(0.85, 1.0 - player.getArmorValue() * 0.0075);
-            injury.addInternalBleeding(finalDamage * INTERNAL_BLEEDING_DAMAGE_SCALE * armorFactor);
-        }
     }
 
     private static int bleedingArmorTier(int armor) {
@@ -170,9 +314,8 @@ public final class InjuryManager {
                 || msg.contains("starve")
                 || msg.contains("magic")
                 || msg.contains("wither")) return false;
-        // Blunt player attacks route to internal bleeding only
         Entity attacker = source.getEntity();
-        if (attacker instanceof Player p && !isSharp(p.getMainHandItem())) return false;
+        if (attacker instanceof Player p && isBluntWeapon(p.getMainHandItem())) return false;
         return true;
     }
 
@@ -186,25 +329,36 @@ public final class InjuryManager {
         Entity direct = source.getDirectEntity();
         if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return false;
         Entity attacker = source.getEntity();
-        if (attacker instanceof Player p) return !isSharp(p.getMainHandItem());
-        return false; // mob melee → external bleeding only
-    }
-
-    private static boolean isLaceratingDamage(DamageSource source) {
-        Entity direct = source.getDirectEntity();
-        if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return true;
-        Entity attacker = source.getEntity();
-        if (attacker instanceof Player player) return isSharp(player.getMainHandItem());
+        if (attacker instanceof Player p) return isBluntWeapon(p.getMainHandItem());
         return false;
     }
 
-    private static boolean isSharp(ItemStack stack) {
-        if (stack.isEmpty()) return false;
+    private static boolean isLaceratingDamage(DamageSource source) {
+        if (source == null) return false;
+        Entity direct = source.getDirectEntity();
+        if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return true;
+        if (isMobBiteDamage(source)) return true;
+        Entity attacker = source.getEntity();
+        if (attacker instanceof Player player) return isSharp(player.getMainHandItem());
+        if (attacker instanceof LivingEntity living) {
+            ItemStack hand = living.getMainHandItem();
+            return !hand.isEmpty() && !isBluntWeapon(hand);
+        }
+        return false;
+    }
+
+    private static boolean isBluntWeapon(ItemStack stack) {
+        if (stack.isEmpty()) return true;
         Item item = stack.getItem();
-        if (item instanceof SwordItem || item instanceof AxeItem || item instanceof HoeItem
-                || item instanceof ShearsItem || item instanceof TridentItem) return true;
+        if (item instanceof AxeItem) return false;
+        if (item instanceof SwordItem || item instanceof HoeItem
+                || item instanceof ShearsItem || item instanceof TridentItem) return false;
         String id = item.getDescriptionId();
-        return id.contains("knife") || id.contains("dagger") || id.contains("blade") || id.contains("spear");
+        return !id.contains("knife") && !id.contains("dagger") && !id.contains("blade") && !id.contains("spear");
+    }
+
+    private static boolean isSharp(ItemStack stack) {
+        return !isBluntWeapon(stack) && !stack.isEmpty();
     }
 
     private static int fleshWoundSeverity(float finalDamage) {

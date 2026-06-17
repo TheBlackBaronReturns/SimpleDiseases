@@ -38,12 +38,15 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.HashMap;
@@ -58,6 +61,7 @@ public class DiseaseEvents {
 
     private static final double NULLIFY_THRESHOLD       = 0.05;
     private static final int    RESERVOIR_PARTICLE_INTERVAL = 8;
+    private static final int    VOMIT_PARTICLE_TICKS        = 80;
 
     private final Map<UUID, PlayerDiseaseState> states                = new HashMap<>();
     private final WetnessManager                wetnessManager        = new WetnessManager();
@@ -68,8 +72,11 @@ public class DiseaseEvents {
     private final Set<UUID>                     debugViralPlayers     = new HashSet<>();
     private final Set<UUID>                     debugBacterialPlayers = new HashSet<>();
     private final Set<ResourceLocation>         suppressedEpisodeSourcesCache = new HashSet<>();
+    private final Set<String>                     suppressedRecoveryCache       = new HashSet<>();
     private final Map<UUID, Boolean>            windchillCachedVal    = new HashMap<>();
     private final Map<UUID, Long>               windchillCachedAt     = new HashMap<>();
+    private final Map<UUID, Long>               vomitParticleUntil    = new HashMap<>();
+    private final Map<UUID, Integer>            lastVomitingDuration  = new HashMap<>();
 
     public ContagionManager  getContagionManager()       { return contagionManager; }
     public FluSeasonManager  getFluSeasonManager()        { return fluSeasonManager; }
@@ -93,6 +100,9 @@ public class DiseaseEvents {
         debugBacterialPlayers.remove(pid);
         windchillCachedVal.remove(pid);
         windchillCachedAt.remove(pid);
+        vomitParticleUntil.remove(pid);
+        lastVomitingDuration.remove(pid);
+        DiseaseParticleEmitter.clearVomitEmitState(pid);
         contagionManager.onPlayerLogout(pid);
     }
 
@@ -144,6 +154,7 @@ public class DiseaseEvents {
 
         wetnessManager.tick(player, state);
         injuryManager.tick(player, state);
+        tickVomitParticles(player, gameTime);
         boolean isDamp = player.hasEffect(DiseaseEffects.DAMP.get());
 
         boolean reservoirActive = false;
@@ -228,15 +239,20 @@ public class DiseaseEvents {
                 || state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH);
 
         if (anyActive) {
-            String suppressedGroup = (isDamp || windActive || !ColdSweatCompat.isWarmEnoughToRecover(player))
-                    ? DiseaseRegistry.GROUP_VIRAL : null;
+            suppressedRecoveryCache.clear();
+            if (isDamp || windActive || !ColdSweatCompat.isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_VIRAL)) {
+                suppressedRecoveryCache.add(DiseaseRegistry.GROUP_VIRAL);
+            }
+            if (!ColdSweatCompat.isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_BACTERIAL)) {
+                suppressedRecoveryCache.add(DiseaseRegistry.GROUP_BACTERIAL);
+            }
             String complicationWorseningGroup = (isDamp || windActive) ? DiseaseRegistry.GROUP_VIRAL : null;
 
             // Build the set of source-disease IDs whose episodes should be suppressed this tick.
             // A complication suppresses its source once it passes its first symptom threshold (0.1).
             buildSuppressedEpisodeSources(state, suppressedEpisodeSourcesCache);
 
-            DiseaseContext ctx = new DiseaseContext(player, suppressedGroup, complicationWorseningGroup,
+            DiseaseContext ctx = new DiseaseContext(player, suppressedRecoveryCache, complicationWorseningGroup,
                     gameTime, lingering, state, suppressedEpisodeSourcesCache);
             tickExistingDiseases(state, ctx, false);
             tickExistingDiseases(state, ctx, true);
@@ -263,6 +279,20 @@ public class DiseaseEvents {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (player.level().isClientSide) return;
         injuryManager.onPlayerDamaged(player, contagionManager.getOrCreate(player), event.getSource(), event.getAmount());
+    }
+
+    @SubscribeEvent
+    public void onBlockBreak(BlockEvent.BreakEvent event) {
+        if (!(event.getPlayer() instanceof ServerPlayer player)) return;
+        if (player.level().isClientSide) return;
+        if (!isBreakableGlass(event.getState())) return;
+        injuryManager.onGlassBrokenBareHand(player, contagionManager.getOrCreate(player));
+    }
+
+    private static boolean isBreakableGlass(net.minecraft.world.level.block.state.BlockState state) {
+        if (!state.is(BlockTags.IMPERMEABLE)) return false;
+        return !state.is(Blocks.ICE) && !state.is(Blocks.PACKED_ICE)
+                && !state.is(Blocks.BLUE_ICE) && !state.is(Blocks.FROSTED_ICE);
     }
 
     @SubscribeEvent
@@ -614,6 +644,24 @@ public class DiseaseEvents {
         String sevStr = sev != null ? sev.name().substring(0, Math.min(4, sev.name().length())) : "?";
         return String.format(" §d%s:%s§r §aep:§e%ds§7/%dsym§r",
                 activeId.getPath(), sevStr, Math.max(0L, secs), state.symptomCount(activeId));
+    }
+
+    private void tickVomitParticles(ServerPlayer player, long gameTime) {
+        UUID uuid = player.getUUID();
+        MobEffectInstance vomit = player.getEffect(DiseaseEffects.VOMITING.get());
+        if (vomit != null) {
+            int dur = vomit.getDuration();
+            int prev = lastVomitingDuration.getOrDefault(uuid, 0);
+            if (dur > prev + 10) {
+                vomitParticleUntil.put(uuid, gameTime + VOMIT_PARTICLE_TICKS);
+            }
+            lastVomitingDuration.put(uuid, dur);
+            if (gameTime < vomitParticleUntil.getOrDefault(uuid, 0L)) {
+                DiseaseParticleEmitter.emitVomiting(player, gameTime);
+            }
+        } else {
+            lastVomitingDuration.remove(uuid);
+        }
     }
 
     private void saveToPlayer(ServerPlayer player) {

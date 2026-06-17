@@ -9,6 +9,7 @@ import com.momosoftworks.coldsweat.util.world.WorldHelper;
 import com.theblackbaron.simplediseases.SimpleDiseases;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
+import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -190,12 +191,22 @@ public class ColdSweatCompat {
     }
 
     /**
+     * Whether the player is warm enough for diseases in the given exclusion group to passively recover.
+     * Viral uses full fever offset; bacterial uses {@link #BACTERIAL_FEVER_GATE_SCALE}.
+     */
+    public static boolean isWarmEnoughForRecovery(ServerPlayer player, String exclusionGroup) {
+        double scale = DiseaseRegistry.GROUP_BACTERIAL.equals(exclusionGroup)
+                ? BACTERIAL_FEVER_GATE_SCALE : 1.0;
+        double threshold = MIN_WORLD_TEMP_TO_RECOVER + feverOffset(player) * scale;
+        return getObjectiveRecoveryWarmth(player) >= threshold;
+    }
+
+    /**
      * Whether the player is warm enough for a respiratory illness to recover. Gates on objective
      * WORLD warmth plus insulation/waterskin; fever raises the threshold without requiring elevated BODY.
      */
     public static boolean isWarmEnoughToRecover(ServerPlayer player) {
-        double threshold = MIN_WORLD_TEMP_TO_RECOVER + feverOffset(player);
-        return getObjectiveRecoveryWarmth(player) >= threshold;
+        return isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_VIRAL);
     }
 
     private static final ResourceLocation FEVER_WORLD_MODIFIER_ID =
@@ -263,8 +274,7 @@ public class ColdSweatCompat {
      * {@code BACTERIAL_FEVER_GATE_SCALE}.
      */
     public static boolean isWarmEnoughForBacterialRecovery(ServerPlayer player) {
-        double threshold = MIN_WORLD_TEMP_TO_RECOVER + feverOffset(player) * BACTERIAL_FEVER_GATE_SCALE;
-        return getObjectiveRecoveryWarmth(player) >= threshold;
+        return isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_BACTERIAL);
     }
 
     private static double feverOffset(ServerPlayer player) {

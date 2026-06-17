@@ -22,4 +22,10 @@ public class DiseaseParticles {
 
     public static final RegistryObject<SimpleParticleType> NOROVIRUS =
             PARTICLES.register("norovirus", () -> new SimpleParticleType(false));
+
+    public static final RegistryObject<SimpleParticleType> BLEEDING =
+            PARTICLES.register("bleeding", () -> new SimpleParticleType(false));
+
+    public static final RegistryObject<SimpleParticleType> VOMIT =
+            PARTICLES.register("vomiting", () -> new SimpleParticleType(false));
 }

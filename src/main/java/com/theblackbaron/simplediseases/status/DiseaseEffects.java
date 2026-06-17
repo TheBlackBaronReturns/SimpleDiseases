@@ -477,7 +477,9 @@ public class DiseaseEffects {
             EFFECTS.register("sneezing", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xF5DEB3) {});
 
     public static final RegistryObject<MobEffect> MALAISE =
-            EFFECTS.register("malaise", MalaiseEffect::new);
+            EFFECTS.register("malaise", () -> new DiseaseMobEffect(MobEffectCategory.NEUTRAL, 0x6E6B7A)
+                    .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("malaise:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(DiseaseAttributes.JUMP_FACTOR.get(),      UUID.nameUUIDFromBytes("malaise:jump_factor".getBytes(StandardCharsets.UTF_8)),       -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL));
 
     public static final RegistryObject<MobEffect> VOMITING =
             EFFECTS.register("vomiting", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x6B8E23) {});
@@ -526,11 +528,11 @@ public class DiseaseEffects {
 
     public static final RegistryObject<MobEffect> SHARP_PAIN =
             EFFECTS.register("sharp_pain", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0xAA2244)
-                    .modifier(Attributes.ATTACK_SPEED,                  UUID.nameUUIDFromBytes("sharp_pain:attack_speed".getBytes(StandardCharsets.UTF_8)),       -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(Attributes.ATTACK_DAMAGE,                 UUID.nameUUIDFromBytes("sharp_pain:attack_damage".getBytes(StandardCharsets.UTF_8)),      -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(DiseaseAttributes.BLOCK_BREAK_SPEED.get(), UUID.nameUUIDFromBytes("sharp_pain:block_break_speed".getBytes(StandardCharsets.UTF_8)), -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(DiseaseAttributes.KNOCKBACK_FACTOR.get(),  UUID.nameUUIDFromBytes("sharp_pain:knockback_factor".getBytes(StandardCharsets.UTF_8)),  -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("sharp_pain:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL));
+                    .modifier(Attributes.ATTACK_SPEED,                  UUID.nameUUIDFromBytes("sharp_pain:attack_speed".getBytes(StandardCharsets.UTF_8)),       -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(Attributes.ATTACK_DAMAGE,                 UUID.nameUUIDFromBytes("sharp_pain:attack_damage".getBytes(StandardCharsets.UTF_8)),      -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(DiseaseAttributes.BLOCK_BREAK_SPEED.get(), UUID.nameUUIDFromBytes("sharp_pain:block_break_speed".getBytes(StandardCharsets.UTF_8)), -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(DiseaseAttributes.KNOCKBACK_FACTOR.get(),  UUID.nameUUIDFromBytes("sharp_pain:knockback_factor".getBytes(StandardCharsets.UTF_8)),  -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("sharp_pain:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL));
 
     public static final RegistryObject<MobEffect> SYMPTOMS_MANAGED =
             EFFECTS.register("symptoms_managed", () -> new MobEffect(MobEffectCategory.BENEFICIAL, 0xFFD080) {});

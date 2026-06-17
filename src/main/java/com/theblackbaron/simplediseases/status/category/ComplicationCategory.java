@@ -112,7 +112,7 @@ public final class ComplicationCategory implements DiseaseCategory {
             prog.add(-cdef.decayRate(), cdef.latchThreshold());
             if (prog.progress <= 0.0) { clearComplication(player, cdef, instance); return; }
         }
-        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, Severity.MODERATE);
+        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, Severity.MODERATE, null);
         if (prog.progress >= cdef.latchThreshold() && src.hasSource()) {
             latch(player, state, cdef, pool, src, tier, prog);
             prog.inRecovery = true;
@@ -135,7 +135,7 @@ public final class ComplicationCategory implements DiseaseCategory {
             prog.add(-cdef.decayRate(), cdef.progressCap());
             if (prog.progress <= 0.0) { clearComplication(player, cdef, instance); return; }
         }
-        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, Severity.MODERATE);
+        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, Severity.MODERATE, null);
         if (prog.progress >= cdef.latchThreshold() && src.hasSource()) {
             latch(player, state, cdef, pool, src, tier, prog);
             prog.inRecovery = true;
@@ -184,7 +184,10 @@ public final class ComplicationCategory implements DiseaseCategory {
         }
 
         if (!cdef.symptoms().pool().isEmpty()) {
-            SymptomService.tickEpisodes(player, pool, cdef.symptoms(), gameTime, tier.severity());
+            MobEffect diseaseEff = src.sourceId != null
+                    ? DiseaseEffects.complicationVariant(cdef.id(), src.sourceId, tier.severity()).get()
+                    : null;
+            SymptomService.tickEpisodes(player, pool, cdef.symptoms(), gameTime, tier.severity(), diseaseEff);
         }
     }
 

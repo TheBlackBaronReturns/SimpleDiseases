@@ -127,14 +127,15 @@ public final class ViralCategory implements DiseaseCategory {
         // players a per-tick effect-resolution sweep.
 
         Severity sev = tier.rolled() ? tier.severity() : Severity.MODERATE;
+        MobEffect diseaseEff = tier.rolled() ? vdef.effectFor(sev).get() : null;
         SymptomEntry fired;
         if (prog.inRecovery) {
             // Skip episodes while a complication child has passed its first symptom threshold.
             fired = ctx.suppressEpisodes(vdef.id())
                     ? null
-                    : SymptomService.tickEpisodes(player, pool, vdef.symptoms(), gameTime, sev);
+                    : SymptomService.tickEpisodes(player, pool, vdef.symptoms(), gameTime, sev, diseaseEff);
         } else {
-            fired = SymptomService.syncPool(player, pool, vdef.symptoms(), prog.progress, sev);
+            fired = SymptomService.syncPool(player, pool, vdef.symptoms(), prog.progress, sev, diseaseEff);
         }
 
         // A vomit/diarrhea episode leaves a lingering contagious puddle (norovirus's transmission vector)

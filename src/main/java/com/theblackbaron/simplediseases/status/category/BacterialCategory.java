@@ -106,7 +106,8 @@ public final class BacterialCategory implements DiseaseCategory {
 
         // Reveal symptoms progressively; use MODERATE as a placeholder until the tier is rolled.
         Severity sev = tier.rolled() ? tier.severity() : Severity.MODERATE;
-        SymptomService.syncPool(player, pool, bdef.symptoms(), prog.progress, sev);
+        MobEffect diseaseEff = tier.rolled() ? bdef.effectFor(sev).get() : null;
+        SymptomService.syncPool(player, pool, bdef.symptoms(), prog.progress, sev, diseaseEff);
 
         if (prog.progress >= bdef.latchThreshold()) {
             prog.inRecovery = true;
@@ -129,7 +130,7 @@ public final class BacterialCategory implements DiseaseCategory {
         }
 
         if (inCapRecovery) {
-            if (ColdSweatCompat.isWarmEnoughForBacterialRecovery(player)) {
+            if (!ctx.suppressRecovery(bdef.exclusionGroup())) {
                 prog.add(-bdef.recoveryRate(), bdef.progressCap());
             }
             if (prog.progress <= 0.0) {
@@ -163,7 +164,8 @@ public final class BacterialCategory implements DiseaseCategory {
 
         // Suppress episodes when a complication child has passed its first threshold.
         if (!ctx.suppressEpisodes(bdef.id())) {
-            SymptomService.tickEpisodes(player, pool, bdef.symptoms(), gameTime, severity);
+            MobEffect diseaseEff = bdef.effectFor(severity).get();
+            SymptomService.tickEpisodes(player, pool, bdef.symptoms(), gameTime, severity, diseaseEff);
         }
     }
 

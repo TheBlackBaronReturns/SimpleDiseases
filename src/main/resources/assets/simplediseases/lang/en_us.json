@@ -111,6 +111,7 @@
   "attribute.simplediseases.disease_max_saturation": "Max Saturation",
   "attribute.simplediseases.disease_knockback_factor": "Knockback Damage",
   "attribute.simplediseases.disease_block_break_speed": "Mining Speed",
+  "attribute.simplediseases.disease_jump_factor": "Jump Strength",
 
 "simplediseases.fever.light":  "§eMild Fever (38°C)",
 "simplediseases.fever.mild":   "§6High Fever (39°C)",
