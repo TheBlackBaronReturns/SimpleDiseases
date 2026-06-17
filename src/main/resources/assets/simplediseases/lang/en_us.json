@@ -108,14 +108,14 @@
   "message.simplediseases.cured_mof": "Your organs stabilize.",
   "message.simplediseases.sharp_pain_no_sleep": "The pain is too intense to sleep.",
 
-  "attribute.simplediseases.disease_max_saturation": "Max Saturation",
-  "attribute.simplediseases.disease_knockback_factor": "Knockback Damage",
-  "attribute.simplediseases.disease_block_break_speed": "Mining Speed",
-  "attribute.simplediseases.disease_jump_factor": "Jump Strength",
-
 "simplediseases.fever.light":  "§eMild Fever (38°C)",
 "simplediseases.fever.mild":   "§6High Fever (39°C)",
-"simplediseases.fever.high":   "§cHyperpyrexia (40°C)",
-"simplediseases.fever.severe": "§4Extreme Hyperpyrexia (≥41°C)",
-"simplediseases.shock": "§dSeptic Shock (<36.0°C)"
+"simplediseases.fever.high":   "§cVery High Fever (40°C)",
+"simplediseases.fever.severe": "§4Hyperpyrexia (≥41°C)",
+"simplediseases.shock": "§dSeptic Shock (<36.0°C)",
+
+"attribute.simplediseases.disease_max_saturation": "Max Saturation",
+"attribute.simplediseases.disease_knockback_factor": "Knockback Damage",
+"attribute.simplediseases.disease_block_break_speed": "Mining Speed",
+"attribute.simplediseases.disease_jump_factor": "Jump Strength"
 }

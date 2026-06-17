@@ -43,7 +43,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.BlockEvent;
@@ -61,7 +61,7 @@ public class DiseaseEvents {
 
     private static final double NULLIFY_THRESHOLD       = 0.05;
     private static final int    RESERVOIR_PARTICLE_INTERVAL = 8;
-    private static final int    VOMIT_PARTICLE_TICKS        = 80;
+    private static final int    VOMIT_PARTICLE_TICKS        = 40;
 
     private final Map<UUID, PlayerDiseaseState> states                = new HashMap<>();
     private final WetnessManager                wetnessManager        = new WetnessManager();
@@ -275,7 +275,7 @@ public class DiseaseEvents {
     }
 
     @SubscribeEvent
-    public void onLivingDamage(LivingDamageEvent event) {
+    public void onLivingHurt(LivingHurtEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (player.level().isClientSide) return;
         injuryManager.onPlayerDamaged(player, contagionManager.getOrCreate(player), event.getSource(), event.getAmount());

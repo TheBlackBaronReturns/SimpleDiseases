@@ -7,11 +7,13 @@ import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.animal.horse.Llama;
 import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.monster.Zombie;
@@ -46,7 +48,6 @@ public final class InjuryManager {
 
     private static final double BLOOD_LOSS_WOUND_THRESHOLD     = 3.5;
     private static final float  BLOOD_LOSS_HP_FLOOR            = 6.0F;
-    private static final int    INJURY_EFFECT_DURATION_TICKS   = 20 * 40;
     private static final int    WOUND_EFFECT_DURATION_TICKS    = MobEffectInstance.INFINITE_DURATION;
 
     private static final int PAIN_EPISODE_MIN_INTERVAL = 45 * 20;
@@ -76,7 +77,7 @@ public final class InjuryManager {
         injury.tick();
 
         double bleeding = injury.bleeding();
-        if (bleeding > 0.5) {
+        if (bleeding >= 0.5) {
             MobEffectInstance bleedingEffect = player.getEffect(DiseaseEffects.BLEEDING.get());
             int amp = bleedingEffect != null ? bleedingEffect.getAmplifier() : 0;
             setWoundEffect(player, DiseaseEffects.BLEEDING.get(), Mth.clamp((int) (bleeding - 0.5), 0, 3));
@@ -114,7 +115,9 @@ public final class InjuryManager {
         }
 
         if (injury.totalWoundLoad() >= BLOOD_LOSS_WOUND_THRESHOLD && player.getHealth() <= BLOOD_LOSS_HP_FLOOR) {
-            player.addEffect(new MobEffectInstance(DiseaseEffects.BLOOD_LOSS.get(), INJURY_EFFECT_DURATION_TICKS, 0, false, false, true));
+            setWoundEffect(player, DiseaseEffects.BLOOD_LOSS.get(), 0);
+        } else {
+            player.removeEffect(DiseaseEffects.BLOOD_LOSS.get());
         }
     }
 
@@ -134,9 +137,8 @@ public final class InjuryManager {
         tryMobBiteBleeding(injury, source, player.getRandom());
 
         if (isBleedingDamage(source)) {
-            float minBleedingDamage = isSharpMobMelee(source) ? MIN_FLESH_WOUND_DAMAGE : MIN_BLEEDING_DAMAGE;
-            if (finalDamage >= minBleedingDamage) {
-                int tier = bleedingArmorTier(player.getArmorValue());
+            if (finalDamage >= minBleedingDamage(source)) {
+                int tier = effectiveArmorTier(player.getArmorValue(), finalDamage);
                 if (player.getRandom().nextDouble() < BLEEDING_CHANCE[tier]) {
                     injury.addBleeding(BLEEDING_AMOUNT[tier]);
                 }
@@ -237,7 +239,7 @@ public final class InjuryManager {
     private static ItemStack getAttackerWeapon(DamageSource source) {
         Entity direct = source.getDirectEntity();
         if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return ItemStack.EMPTY;
-        Entity attacker = source.getEntity();
+        Entity attacker = resolveAttacker(source);
         if (attacker instanceof Player player) return player.getMainHandItem();
         if (attacker instanceof LivingEntity living) return living.getMainHandItem();
         return ItemStack.EMPTY;
@@ -250,18 +252,28 @@ public final class InjuryManager {
         }
     }
 
+    /** Direct melee from a mob (teeth/claws/fists), not a thrown or projected hit. */
+    private static boolean isDirectMobMelee(DamageSource source) {
+        if (source == null) return false;
+        return source.is(DamageTypes.MOB_ATTACK)
+                || source.is(DamageTypes.MOB_ATTACK_NO_AGGRO)
+                || source.is(DamageTypes.STING);
+    }
+
     private static boolean isMobBiteDamage(DamageSource source) {
-        if (source == null || source.isIndirect()) return false;
-        Entity attacker = source.getEntity();
+        if (!isDirectMobMelee(source)) return false;
+        Entity attacker = resolveAttacker(source);
         if (attacker instanceof Llama) return false;
         return attacker instanceof Zombie || attacker instanceof Spider || attacker instanceof Animal;
     }
 
-    private static boolean isSharpMobMelee(DamageSource source) {
-        if (source == null || source.isIndirect()) return false;
+    /** Prefer the causing entity; fall back to the direct entity for single-entity mob sources. */
+    private static Entity resolveAttacker(DamageSource source) {
+        if (source == null) return null;
         Entity attacker = source.getEntity();
-        if (!(attacker instanceof LivingEntity living) || attacker instanceof Player) return false;
-        return isSharp(living.getMainHandItem());
+        if (attacker != null) return attacker;
+        Entity direct = source.getDirectEntity();
+        return direct instanceof LivingEntity ? direct : null;
     }
 
     private static boolean isCrossbowProjectile(DamageSource source) {
@@ -294,6 +306,7 @@ public final class InjuryManager {
         player.removeEffect(DiseaseEffects.BLEEDING.get());
         player.removeEffect(DiseaseEffects.INTERNAL_BLEEDING.get());
         player.removeEffect(DiseaseEffects.FLESH_WOUND.get());
+        player.removeEffect(DiseaseEffects.BLOOD_LOSS.get());
     }
 
     private static int bleedingArmorTier(int armor) {
@@ -301,6 +314,11 @@ public final class InjuryManager {
         if (armor <= 6)  return 1;
         if (armor <= 10) return 2;
         return 3;
+    }
+
+    /** Blunt hits need ≥5 HP; lacerating sources (arrows, sharp weapons, mob claws/teeth) need ≥4 HP. */
+    private static float minBleedingDamage(DamageSource source) {
+        return isLaceratingDamage(source) ? MIN_FLESH_WOUND_DAMAGE : MIN_BLEEDING_DAMAGE;
     }
 
     private static boolean isBleedingDamage(DamageSource source) {
@@ -314,7 +332,8 @@ public final class InjuryManager {
                 || msg.contains("starve")
                 || msg.contains("magic")
                 || msg.contains("wither")) return false;
-        Entity attacker = source.getEntity();
+        Entity attacker = resolveAttacker(source);
+        if (attacker instanceof IronGolem) return false;
         if (attacker instanceof Player p && isBluntWeapon(p.getMainHandItem())) return false;
         return true;
     }
@@ -328,7 +347,8 @@ public final class InjuryManager {
         if (msg.contains("starve") || msg.contains("magic") || msg.contains("wither")) return false;
         Entity direct = source.getDirectEntity();
         if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return false;
-        Entity attacker = source.getEntity();
+        Entity attacker = resolveAttacker(source);
+        if (attacker instanceof IronGolem) return isDirectMobMelee(source);
         if (attacker instanceof Player p) return isBluntWeapon(p.getMainHandItem());
         return false;
     }
@@ -337,13 +357,17 @@ public final class InjuryManager {
         if (source == null) return false;
         Entity direct = source.getDirectEntity();
         if (direct instanceof AbstractArrow || direct instanceof ThrownTrident) return true;
-        if (isMobBiteDamage(source)) return true;
-        Entity attacker = source.getEntity();
-        if (attacker instanceof Player player) return isSharp(player.getMainHandItem());
-        if (attacker instanceof LivingEntity living) {
-            ItemStack hand = living.getMainHandItem();
-            return !hand.isEmpty() && !isBluntWeapon(hand);
+        if (isDirectMobMelee(source)) {
+            Entity attacker = resolveAttacker(source);
+            if (attacker instanceof IronGolem) return false;
+            if (attacker instanceof LivingEntity living && !(attacker instanceof Player)) {
+                ItemStack hand = living.getMainHandItem();
+                return hand.isEmpty() || !isBluntWeapon(hand);
+            }
+            return false;
         }
+        Entity attacker = resolveAttacker(source);
+        if (attacker instanceof Player player) return isSharp(player.getMainHandItem());
         return false;
     }
 
