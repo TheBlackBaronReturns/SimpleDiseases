@@ -18,7 +18,7 @@ public enum SymptomAction {
     NAUSEA,
     /** Apply a brief, drastic Slowness (shortness of breath) — the movement-speed crash. */
     BREATHLESS,
-    /** Repeated damage over a short window (the Bad Cough coughing fit) via the hidden COUGH_FIT effect. */
+    /** Repeated magic damage during a Bloody Coughing episode via BloodyCoughingEffect. */
     DAMAGE;
 
     public static final Codec<SymptomAction> CODEC = Codec.STRING.xmap(

@@ -141,7 +141,6 @@ public final class BacterialCategory implements DiseaseCategory {
             }
         } else {
             prog.add(bdef.worseningRate(), bdef.progressCap());
-            tickSeverityWorsening(bdef, tier, prog.progress, player);
         }
 
         // Defensive: latched without a roll (e.g. migrated save with severity=-1).
@@ -149,6 +148,9 @@ public final class BacterialCategory implements DiseaseCategory {
 
         // Swap to the current tier's permanent effect.
         Severity severity = tier.severity();
+        if (!inCapRecovery) {
+            tickSeverityWorsening(bdef, tier, prog.progress, player, pool, bdef.effectFor(severity).get());
+        }
         for (Severity other : bdef.tiers()) {
             if (other != severity) {
                 MobEffect stale = bdef.effectFor(other).get();
@@ -170,7 +172,8 @@ public final class BacterialCategory implements DiseaseCategory {
     }
 
     private static void tickSeverityWorsening(BacterialDiseaseDef bdef, TierComponent tier,
-                                               double progress, ServerPlayer player) {
+                                               double progress, ServerPlayer player,
+                                               SymptomPoolComponent pool, MobEffect diseaseEff) {
         if (!tier.rolled()) { tier.previousWorseningProgress = progress; return; }
         List<Double> thresholds   = bdef.worseningThresholds();
         int          maxSevOrdinal = bdef.tiers().get(bdef.tierCount() - 1).ordinal();
@@ -184,8 +187,11 @@ public final class BacterialCategory implements DiseaseCategory {
             if (tier.severity >= maxSevOrdinal) continue;
             float chance = (float) (WORSEN_BASE_CHANCE * Math.pow(WORSEN_DECAY, tier.worsenings));
             if (player.getRandom().nextFloat() < chance) {
+                Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;
                 tier.worsenings++;
+                SymptomService.tryUpgradeIncidental(player, pool, bdef.symptoms(), oldTier,
+                        Severity.byOrdinal(tier.severity), diseaseEff);
                 player.sendSystemMessage(Component.translatable(bdef.worsensKey()));
             }
         }

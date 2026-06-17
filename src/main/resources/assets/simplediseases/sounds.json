@@ -22,5 +22,17 @@
   "stomach_cramps": {
     "subtitle": "subtitles.simplediseases.stomach_cramps",
     "sounds": [ "simplediseases:stomach_cramps" ]
+  },
+  "heartbeat": {
+    "subtitle": "subtitles.simplediseases.heartbeat",
+    "sounds": [ "simplediseases:heartbeat" ]
+  },
+  "rapid_breathing": {
+    "subtitle": "subtitles.simplediseases.rapid_breathing",
+    "sounds": [ "simplediseases:rapid_breathing" ]
+  },
+  "wheezing": {
+    "subtitle": "subtitles.simplediseases.wheezing",
+    "sounds": [ "simplediseases:wheezing" ]
   }
 }

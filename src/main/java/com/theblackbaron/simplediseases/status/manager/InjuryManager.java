@@ -50,11 +50,6 @@ public final class InjuryManager {
     private static final float  BLOOD_LOSS_HP_FLOOR            = 6.0F;
     private static final int    WOUND_EFFECT_DURATION_TICKS    = MobEffectInstance.INFINITE_DURATION;
 
-    private static final int PAIN_EPISODE_MIN_INTERVAL = 45 * 20;
-    private static final int PAIN_EPISODE_MAX_INTERVAL = 90 * 20;
-    private static final int PAIN_DURATION_MIN         = 20 * 20;
-    private static final int PAIN_DURATION_MAX         = 40 * 20;
-
     private static final double LIGHT_BLEEDING_AMOUNT = 1.0;
     private static final int    CACTUS_BLEED_COOLDOWN = 20;
 
@@ -109,7 +104,6 @@ public final class InjuryManager {
 
         if (woundSeverity >= 0 && !state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) {
             setWoundEffect(player, DiseaseEffects.FLESH_WOUND.get(), woundSeverity);
-            tickFleshWoundPain(player, injury, state, gameTime);
         } else {
             player.removeEffect(DiseaseEffects.FLESH_WOUND.get());
         }
@@ -161,24 +155,6 @@ public final class InjuryManager {
         state.injury().addBleeding(LIGHT_BLEEDING_AMOUNT);
     }
 
-    private void tickFleshWoundPain(ServerPlayer player, PlayerInjuryState injury,
-                                    PlayerDiseaseState state, long gameTime) {
-        if (state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) return;
-        if (player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) return;
-
-        RandomSource random = player.getRandom();
-        if (injury.nextPainEpisodeAt() == 0L) {
-            injury.setNextPainEpisodeAt(gameTime + randomBetween(random, PAIN_EPISODE_MIN_INTERVAL, PAIN_EPISODE_MAX_INTERVAL));
-            return;
-        }
-
-        if (gameTime >= injury.nextPainEpisodeAt()) {
-            int duration = randomBetween(random, PAIN_DURATION_MIN, PAIN_DURATION_MAX);
-            player.addEffect(new MobEffectInstance(DiseaseEffects.SHARP_PAIN.get(), duration, 0, false, false, true));
-            injury.setNextPainEpisodeAt(gameTime + randomBetween(random, PAIN_EPISODE_MIN_INTERVAL, PAIN_EPISODE_MAX_INTERVAL));
-        }
-    }
-
     private static boolean tryFleshWound(ServerPlayer player, PlayerInjuryState injury,
                                          PlayerDiseaseState state, DamageSource source, float finalDamage) {
         if (finalDamage < MIN_FLESH_WOUND_DAMAGE || !isLaceratingDamage(source)) return false;
@@ -215,18 +191,6 @@ public final class InjuryManager {
         int severity = fleshWoundSeverity(finalDamage);
         injury.addFleshWound(severity);
         injury.addBleeding(fleshWoundBleedingBonus(severity));
-        fireFleshWoundPainEpisode(player, injury, state, gameTime);
-    }
-
-    private static void fireFleshWoundPainEpisode(ServerPlayer player, PlayerInjuryState injury,
-                                                  PlayerDiseaseState state, long gameTime) {
-        if (state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) return;
-        if (player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) return;
-
-        RandomSource random = player.getRandom();
-        int duration = randomBetween(random, PAIN_DURATION_MIN, PAIN_DURATION_MAX);
-        player.addEffect(new MobEffectInstance(DiseaseEffects.SHARP_PAIN.get(), duration, 0, false, false, true));
-        injury.setNextPainEpisodeAt(gameTime + randomBetween(random, PAIN_EPISODE_MIN_INTERVAL, PAIN_EPISODE_MAX_INTERVAL));
     }
 
     private static int effectiveArmorTier(int armor, float finalDamage) {

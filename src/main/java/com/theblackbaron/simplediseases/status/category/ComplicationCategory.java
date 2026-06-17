@@ -12,6 +12,8 @@ import com.theblackbaron.simplediseases.status.component.SourceComponent;
 import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.component.TierComponent;
 import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
+import com.theblackbaron.simplediseases.status.def.SymptomConfig;
+import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
@@ -19,6 +21,7 @@ import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
 import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
+import com.theblackbaron.simplediseases.status.service.SourceSymptomSnapshot;
 import com.theblackbaron.simplediseases.status.service.SymptomService;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -27,6 +30,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -112,7 +116,7 @@ public final class ComplicationCategory implements DiseaseCategory {
             prog.add(-cdef.decayRate(), cdef.latchThreshold());
             if (prog.progress <= 0.0) { clearComplication(player, cdef, instance); return; }
         }
-        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, Severity.MODERATE, null);
+        syncComplicationPool(player, state, pool, cdef, src, tier, prog);
         if (prog.progress >= cdef.latchThreshold() && src.hasSource()) {
             latch(player, state, cdef, pool, src, tier, prog);
             prog.inRecovery = true;
@@ -135,7 +139,7 @@ public final class ComplicationCategory implements DiseaseCategory {
             prog.add(-cdef.decayRate(), cdef.progressCap());
             if (prog.progress <= 0.0) { clearComplication(player, cdef, instance); return; }
         }
-        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, Severity.MODERATE, null);
+        syncComplicationPool(player, state, pool, cdef, src, tier, prog);
         if (prog.progress >= cdef.latchThreshold() && src.hasSource()) {
             latch(player, state, cdef, pool, src, tier, prog);
             prog.inRecovery = true;
@@ -163,7 +167,7 @@ public final class ComplicationCategory implements DiseaseCategory {
 
         if (cdef.deterministicWorsening()) {
             prog.add(cdef.worseningRate(), cdef.progressCap());
-            tickDeterministicWorsening(cdef, tier, prog.progress, player);
+            tickDeterministicWorsening(cdef, pool, src, tier, prog.progress, player);
         } else {
             if (worseningConditions) {
                 prog.add(accumRate(player, src), cdef.progressCap());
@@ -172,7 +176,7 @@ public final class ComplicationCategory implements DiseaseCategory {
                 prog.add(-recovRate, cdef.progressCap());
                 if (prog.progress <= 0.0) { cure(player, state, cdef, instance, gameTime); return; }
             }
-            tickStochasticWorsening(cdef, tier, prog.progress, player);
+            tickStochasticWorsening(cdef, pool, src, tier, prog.progress, player);
         }
 
         ensureEffect(player, cdef, src, tier);
@@ -183,11 +187,12 @@ public final class ComplicationCategory implements DiseaseCategory {
             player.hurt(player.level().damageSources().magic(), 1.0f);
         }
 
-        if (!cdef.symptoms().pool().isEmpty()) {
+        if (cdef.symptoms().symptomBits() > 0) {
             MobEffect diseaseEff = src.sourceId != null
                     ? DiseaseEffects.complicationVariant(cdef.id(), src.sourceId, tier.severity()).get()
                     : null;
             SymptomService.tickEpisodes(player, pool, cdef.symptoms(), gameTime, tier.severity(), diseaseEff);
+            SymptomService.ensureStaticMarkers(player, pool, cdef.symptoms());
         }
     }
 
@@ -221,8 +226,8 @@ public final class ComplicationCategory implements DiseaseCategory {
         // Clear (absorb) the source disease entirely.
         absorbSource(player, state, sourceId);
 
-        // Biased-roll: source tier → roll count → severity from complication's tier window.
-        rollBiasedTier(cdef, tier, player, sourceTier);
+        // Biased-roll at first threshold (pre-latch); defensive roll only if latch happens without one.
+        if (!tier.rolled()) rollBiasedTier(cdef, tier, player, sourceTier);
 
         tier.reductions                = 0;
         tier.worseningChecks           = 0;
@@ -244,7 +249,8 @@ public final class ComplicationCategory implements DiseaseCategory {
     // WORSENING
     // =========================================================================
 
-    private void tickStochasticWorsening(ComplicationDiseaseDef cdef, TierComponent tier,
+    private void tickStochasticWorsening(ComplicationDiseaseDef cdef, SymptomPoolComponent pool,
+                                          SourceComponent src, TierComponent tier,
                                           double progress, ServerPlayer player) {
         if (!tier.rolled()) { tier.previousWorseningProgress = progress; return; }
         List<Double> thresholds = cdef.worseningThresholds();
@@ -259,15 +265,18 @@ public final class ComplicationCategory implements DiseaseCategory {
             if (tier.severity >= maxSevOrd) continue;
             float chance = (float) Math.min(1.0, STOCHASTIC_BASE_CHANCE + STOCHASTIC_MOMENTUM * tier.worsenings);
             if (player.getRandom().nextFloat() < chance) {
+                Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;
                 tier.worsenings++;
+                tryUpgradeAfterWorsen(player, pool, cdef, src, tier, oldTier);
                 sendWorsensMessage(player, cdef);
             }
         }
         tier.previousWorseningProgress = progress;
     }
 
-    private void tickDeterministicWorsening(ComplicationDiseaseDef cdef, TierComponent tier,
+    private void tickDeterministicWorsening(ComplicationDiseaseDef cdef, SymptomPoolComponent pool,
+                                             SourceComponent src, TierComponent tier,
                                              double progress, ServerPlayer player) {
         if (!tier.rolled()) { tier.previousWorseningProgress = progress; return; }
         List<Double> thresholds = cdef.worseningThresholds();
@@ -277,7 +286,9 @@ public final class ComplicationCategory implements DiseaseCategory {
             if ((tier.worseningChecks & bit) != 0 || progress < thresholds.get(i)) continue;
             tier.worseningChecks |= bit;
             if (tier.severity < maxSevOrd) {
+                Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;
+                tryUpgradeAfterWorsen(player, pool, cdef, src, tier, oldTier);
                 sendWorsensMessage(player, cdef);
             }
         }
@@ -452,6 +463,49 @@ public final class ComplicationCategory implements DiseaseCategory {
         if (sourceDef instanceof BacterialDiseaseDef b)   return b.tiers();
         if (sourceDef instanceof ComplicationDiseaseDef c) return c.tiers();
         return List.of(Severity.MODERATE);
+    }
+
+    private static void tryUpgradeAfterWorsen(ServerPlayer player, SymptomPoolComponent pool,
+                                               ComplicationDiseaseDef cdef, SourceComponent src,
+                                               TierComponent tier, Severity oldTier) {
+        MobEffect diseaseEff = src.sourceId != null
+                ? DiseaseEffects.complicationVariant(cdef.id(), src.sourceId, tier.severity()).get()
+                : null;
+        SymptomService.tryUpgradeIncidental(player, pool, cdef.symptoms(), oldTier, tier.severity(), diseaseEff);
+    }
+
+    private void syncComplicationPool(ServerPlayer player, PlayerDiseaseState state, SymptomPoolComponent pool,
+                                       ComplicationDiseaseDef cdef, SourceComponent src, TierComponent tier,
+                                       ProgressComponent prog) {
+        List<Double> thresholds = cdef.symptoms().thresholds();
+        double firstThreshold = thresholds.isEmpty() ? cdef.latchThreshold() : thresholds.get(0);
+        if (prog.progress >= firstThreshold && !tier.rolled() && src.hasSource()) {
+            Severity sourceTier = state.tierOf(src.sourceId);
+            if (sourceTier != null) rollBiasedTier(cdef, tier, player, sourceTier);
+        }
+        Severity sev = tier.rolled() ? tier.severity() : Severity.MODERATE;
+        SymptomService.syncPool(player, pool, cdef.symptoms(), prog.progress, sev, null,
+                sourceSnapshot(state, src));
+    }
+
+    private static Optional<SourceSymptomSnapshot> sourceSnapshot(PlayerDiseaseState state, SourceComponent src) {
+        if (!src.hasSource()) return Optional.empty();
+        ResourceLocation sourceId = src.sourceId;
+        DiseaseInstance sourceInst = state.peek(sourceId);
+        DiseaseDef sourceDef = DiseaseRegistry.get(sourceId);
+        if (sourceInst == null || sourceDef == null) return Optional.empty();
+        SymptomPoolComponent sourcePool = sourceInst.get(Components.SYMPTOMS);
+        if (sourcePool == null) return Optional.empty();
+        SymptomConfig sourceConfig = symptomsOf(sourceDef);
+        if (sourceConfig == null) return Optional.empty();
+        return Optional.of(new SourceSymptomSnapshot(sourceConfig, sourcePool.mask));
+    }
+
+    private static SymptomConfig symptomsOf(DiseaseDef def) {
+        if (def instanceof ViralDiseaseDef v) return v.symptoms();
+        if (def instanceof BacterialDiseaseDef b) return b.symptoms();
+        if (def instanceof ComplicationDiseaseDef c) return c.symptoms();
+        return null;
     }
 
     private void rollBiasedTier(ComplicationDiseaseDef cdef, TierComponent tier,

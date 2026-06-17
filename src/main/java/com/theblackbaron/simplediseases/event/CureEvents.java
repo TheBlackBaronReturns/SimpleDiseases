@@ -3,7 +3,6 @@ package com.theblackbaron.simplediseases.event;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.component.Components;
 import com.theblackbaron.simplediseases.status.component.DiseaseInstance;
-import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.component.TierComponent;
 import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
@@ -11,7 +10,6 @@ import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
 import com.theblackbaron.simplediseases.status.manager.ContagionManager;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
-import com.theblackbaron.simplediseases.status.service.SymptomService;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
@@ -49,10 +47,10 @@ public class CureEvents {
         PlayerDiseaseState data = contagionManager.getOrCreate(player);
         boolean any = false;
         for (DiseaseDef def : DiseaseRegistry.viral()) {
-            if (treat(player, data, def, 1.0, false, true)) any = true;
+            if (treat(player, data, def, 1.0, false)) any = true;
         }
         for (DiseaseDef def : DiseaseRegistry.complications()) {
-            if (treat(player, data, def, 1.0, false, true)) any = true;
+            if (treat(player, data, def, 1.0, false)) any = true;
         }
         if (!any) return;
         player.sendSystemMessage(Component.literal("§7You feel better after resting."));
@@ -78,10 +76,10 @@ public class CureEvents {
         PlayerDiseaseState data = contagionManager.getOrCreate(player);
         boolean any = false;
         for (DiseaseDef def : DiseaseRegistry.viral()) {
-            if (treat(player, data, def, SYMPTOMS_MANAGED_REDUCTION, true, false)) any = true;
+            if (treat(player, data, def, SYMPTOMS_MANAGED_REDUCTION, false)) any = true;
         }
         for (DiseaseDef def : DiseaseRegistry.complications()) {
-            if (treat(player, data, def, SYMPTOMS_MANAGED_REDUCTION, true, false)) any = true;
+            if (treat(player, data, def, SYMPTOMS_MANAGED_REDUCTION, false)) any = true;
         }
         if (!any) return;
         player.addEffect(new MobEffectInstance(
@@ -94,10 +92,10 @@ public class CureEvents {
         PlayerDiseaseState data = contagionManager.getOrCreate(player);
         boolean any = false;
         for (DiseaseDef def : DiseaseRegistry.viral()) {
-            if (treat(player, data, def, TREATMENT_APPLIED_REDUCTION, true, true)) any = true;
+            if (treat(player, data, def, TREATMENT_APPLIED_REDUCTION, true)) any = true;
         }
         for (DiseaseDef def : DiseaseRegistry.complications()) {
-            if (treat(player, data, def, TREATMENT_APPLIED_REDUCTION, true, true)) any = true;
+            if (treat(player, data, def, TREATMENT_APPLIED_REDUCTION, true)) any = true;
         }
         if (!any) return;
         if (player.hasEffect(DiseaseEffects.SYMPTOMS_MANAGED.get())) {
@@ -115,13 +113,12 @@ public class CureEvents {
     private static final double TIER_REDUCE_DECAY       = 0.50;
 
     private static boolean treat(ServerPlayer player, PlayerDiseaseState data, DiseaseDef def,
-                                 double reduction, boolean clearSymptoms, boolean reduceSeverity) {
+                                 double reduction, boolean reduceSeverity) {
         ResourceLocation id = def.id();
         if (def instanceof ComplicationDiseaseDef && !data.inRecovery(id)) return false;
         if (data.progress(id) < 0.1 && !data.inRecovery(id)) return false;
         data.addProgress(id, -reduction);
         if (reduceSeverity && data.inRecovery(id)) tryReduceTier(player, data, def);
-        if (clearSymptoms) clearActiveSymptoms(player, data, def);
         return true;
     }
 
@@ -142,18 +139,6 @@ public class CureEvents {
             tier.worsenings = 0;
             tier.previousWorseningProgress = data.progress(id);
             player.sendSystemMessage(Component.literal("§aYour condition eases."));
-        }
-    }
-
-    private static void clearActiveSymptoms(ServerPlayer player, PlayerDiseaseState data, DiseaseDef def) {
-        ResourceLocation id = def.id();
-        DiseaseInstance inst = data.peek(id);
-        if (inst == null) return;
-        SymptomPoolComponent pool = inst.get(Components.SYMPTOMS);
-        if (pool != null && def instanceof ViralDiseaseDef v) {
-            SymptomService.clearActive(player, pool, v.symptoms());
-        } else if (pool != null && def instanceof ComplicationDiseaseDef c) {
-            SymptomService.clearActive(player, pool, c.symptoms());
         }
     }
 

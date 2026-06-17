@@ -105,8 +105,6 @@ public final class ViralCategory implements DiseaseCategory {
             rollSeverity(vdef, tier, player);
         }
 
-        tickSeverityWorsening(vdef, tier, prog.progress, player);
-
         // Disease MobEffect: while latched, keep exactly the current tier's variant present (swapping
         // if a treatment reduction changed the tier); otherwise remove any variant.
         if (prog.inRecovery) {
@@ -128,6 +126,7 @@ public final class ViralCategory implements DiseaseCategory {
 
         Severity sev = tier.rolled() ? tier.severity() : Severity.MODERATE;
         MobEffect diseaseEff = tier.rolled() ? vdef.effectFor(sev).get() : null;
+        tickSeverityWorsening(vdef, tier, prog.progress, player, pool, diseaseEff);
         SymptomEntry fired;
         if (prog.inRecovery) {
             // Skip episodes while a complication child has passed its first symptom threshold.
@@ -170,7 +169,8 @@ public final class ViralCategory implements DiseaseCategory {
         tier.reductions = 0;
     }
 
-    private static void tickSeverityWorsening(ViralDiseaseDef def, TierComponent tier, double progress, ServerPlayer player) {
+    private static void tickSeverityWorsening(ViralDiseaseDef def, TierComponent tier, double progress,
+                                               ServerPlayer player, SymptomPoolComponent pool, MobEffect diseaseEff) {
         if (!tier.rolled()) {
             tier.previousWorseningProgress = progress;
             return;
@@ -187,8 +187,11 @@ public final class ViralCategory implements DiseaseCategory {
             if (tier.severity >= maxSeverity) continue;
             float chance = (float) (TIER_WORSEN_BASE_CHANCE * Math.pow(TIER_WORSEN_DECAY, tier.worsenings));
             if (player.getRandom().nextFloat() < chance) {
+                Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;
                 tier.worsenings++;
+                SymptomService.tryUpgradeIncidental(player, pool, def.symptoms(), oldTier,
+                        Severity.byOrdinal(tier.severity), diseaseEff);
                 player.sendSystemMessage(Component.literal("§cYour condition worsens."));
             }
         }

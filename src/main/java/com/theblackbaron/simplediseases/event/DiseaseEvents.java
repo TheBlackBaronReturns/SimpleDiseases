@@ -26,6 +26,7 @@ import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
 import com.theblackbaron.simplediseases.status.manager.InjuryManager;
 import com.theblackbaron.simplediseases.status.manager.LingeringNorovirusManager;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
+import com.theblackbaron.simplediseases.status.service.PersistentEffectService;
 import com.theblackbaron.simplediseases.status.manager.WaterborneManager;
 import com.theblackbaron.simplediseases.status.manager.WetnessManager;
 import com.theblackbaron.simplediseases.status.manager.WindchillManager;
@@ -264,6 +265,7 @@ public class DiseaseEvents {
         }
 
         contagionManager.tick(player, state);
+        PersistentEffectService.syncForPlayer(player, state);
 
         if (gameTime % 200 == Math.floorMod(player.getId(), 200)) saveToPlayer(player);
 

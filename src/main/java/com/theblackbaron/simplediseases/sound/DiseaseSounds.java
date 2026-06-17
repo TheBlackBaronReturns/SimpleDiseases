@@ -23,6 +23,9 @@ public class DiseaseSounds {
     public static final RegistryObject<SoundEvent> DIARRHEA            = register("diarrhea");
     public static final RegistryObject<SoundEvent> SHORTNESS_OF_BREATH = register("shortness_of_breath");
     public static final RegistryObject<SoundEvent> STOMACH_CRAMPS      = register("stomach_cramps");
+    public static final RegistryObject<SoundEvent> HEARTBEAT       = register("heartbeat");
+    public static final RegistryObject<SoundEvent> RAPID_BREATHING = register("rapid_breathing");
+    public static final RegistryObject<SoundEvent> WHEEZING_SOUND  = register("wheezing");
 
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name,

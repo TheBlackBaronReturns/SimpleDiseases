@@ -1,12 +1,14 @@
 package com.theblackbaron.simplediseases.status.service;
 
+import com.theblackbaron.simplediseases.status.BloodyCoughingEffect;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
-import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
 import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.def.SymptomAction;
+import com.theblackbaron.simplediseases.status.def.SymptomBand;
 import com.theblackbaron.simplediseases.status.def.SymptomConfig;
 import com.theblackbaron.simplediseases.status.def.SymptomEntry;
+import com.theblackbaron.simplediseases.status.def.SymptomTiming;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -16,107 +18,61 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.food.FoodData;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+
 /**
- * Shared symptom-episode machinery, category-agnostic. Operates on a {@link SymptomPoolComponent}
- * (live state) plus a {@link SymptomConfig} (the Moderate-baseline pool + pacing), scaled by the
- * illness's rolled {@link Severity}: higher tiers get longer episodes and shorter intervals. Logic
- * is the hardened cold/flu behavior — a monotonic high-water-mark pool during accumulation, recurring
- * random episodes during recovery, and full suppression under TREATMENT_APPLIED.
+ * Hallmark-first pool sync, episodic rotation, static markers, and tier-worsen severe upgrades.
  */
 public final class SymptomService {
     private SymptomService() {}
 
-    // Magnitudes for the DRAIN_FOOD action (flu vomiting): drop hunger, reset saturation.
     private static final int   VOMIT_FOOD_DROP      = 3;
     private static final float VOMIT_SATURATION_SET = 0.0f;
 
-    /**
-     * Accumulation phase: grow the pool as progress reaches new thresholds (monotonic — never
-     * removed if progress dips), resetting at 0. Fires the newly added symptom once, unless
-     * TREATMENT_APPLIED suppresses the visual.
-     *
-     * <p>Selection is gated by the illness's rolled {@code severity}: only symptoms whose
-     * {@link SymptomEntry#minSeverity()} is at or below the rolled tier are eligible to be drawn, and
-     * the count is capped at the eligible total. So a mild flu can never pull vomiting (min SEVERE),
-     * while a severe one merely has the chance to — selection stays random. The tier is rolled at the
-     * first threshold (see ViralCategory), so it's available here before any symptom is chosen.
-     */
     public static SymptomEntry syncPool(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
                                         double progress, Severity severity, MobEffect diseaseEffectForAmp) {
-        int addedBit = -1;
+        return syncPool(player, pool, config, progress, severity, diseaseEffectForAmp, Optional.empty());
+    }
+
+    public static SymptomEntry syncPool(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
+                                        double progress, Severity severity, MobEffect diseaseEffectForAmp,
+                                        Optional<SourceSymptomSnapshot> source) {
         if (progress <= 0.0) {
             pool.clearAll();
-        } else {
-            int bits = config.symptomBits();
-            // A treatment reduction may have dropped the tier below a pooled symptom's gate — drop it.
-            pruneIneligible(player, pool, config, severity);
-            int targetCount = 0;
-            for (double threshold : config.thresholds()) {
-                if (progress >= threshold) targetCount++;
-            }
-            // Cap the target at how many symptoms this tier is even allowed to manifest.
-            int eligibleCount = 0;
-            for (int b = 0; b < bits; b++) {
-                if (eligible(config, b, severity)) eligibleCount++;
-            }
-            if (targetCount > eligibleCount) targetCount = eligibleCount;
+            pool.dirty = true;
+            ensureStaticMarkers(player, pool, config);
+            return null;
+        }
 
-            int symptomCount = pool.count();
-            while (symptomCount < targetCount) {
-                int unusedEligible = 0;
-                for (int b = 0; b < bits; b++) {
-                    if (!pool.has(b) && eligible(config, b, severity)) unusedEligible++;
-                }
-                int pick = player.getRandom().nextInt(unusedEligible);
-                for (int b = 0; b < bits; b++) {
-                    if (!pool.has(b) && eligible(config, b, severity)) {
-                        if (pick == 0) { pool.set(b); addedBit = b; break; }
-                        pick--;
-                    }
-                }
-                symptomCount++;
+        int targetCount = targetCount(config, progress, severity);
+        SymptomEntry fired = null;
+        while (pool.count() < targetCount) {
+            int bit = pickNextBit(player, pool, config, severity, source);
+            if (bit < 0) break;
+            setPoolBit(player, pool, config, bit);
+            if (config.entryAt(bit).timing() != SymptomTiming.STATIC
+                    && !player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) {
+                fired = fire(player, config, bit, severity, diseaseEffectForAmp);
             }
         }
-        if (addedBit >= 0 && !player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) {
-            return fire(player, config, addedBit, severity, diseaseEffectForAmp);
-        }
-        return null;
+        ensureStaticMarkers(player, pool, config);
+        return fired;
     }
 
-    /** Whether symptom {@code bit} is eligible at the rolled {@code severity} (min-severity gate). */
-    private static boolean eligible(SymptomConfig config, int bit, Severity severity) {
-        return severity.ordinal() >= config.pool().get(bit).minSeverity().ordinal();
-    }
-
-    /** Clears any pooled symptom no longer eligible at the current tier (bit + active effect). Lets a
-     *  treatment-driven tier reduction retroactively remove a symptom that's now above the gate. */
-    private static void pruneIneligible(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config, Severity severity) {
-        int bits = config.symptomBits();
-        for (int b = 0; b < bits; b++) {
-            if (pool.has(b) && !eligible(config, b, severity)) {
-                pool.clear(b);
-                MobEffect effect = config.pool().get(b).effect().get();
-                if (player.hasEffect(effect)) player.removeEffect(effect);
-            }
-        }
-    }
-
-    /**
-     * Runs for the whole time the disease is latched: picks a random pool symptom each episode for a
-     * tier-scaled duration, then schedules the next after a tier-scaled interval. The first episode
-     * is scheduled one interval out from latch. TREATMENT_APPLIED cancels the active episode and holds
-     * the timer so nothing fires the instant it expires.
-     */
     public static SymptomEntry tickEpisodes(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
                                             long gameTime, Severity severity, MobEffect diseaseEffectForAmp) {
-        // A treatment reduction during recovery may have dropped the tier below a pooled symptom's
-        // gate — drop it so a now-too-severe symptom stops being picked for episodes.
-        pruneIneligible(player, pool, config, severity);
-        int symptomCount = pool.count();
-        if (symptomCount == 0) return null;
+        int episodicCount = episodicCount(pool, config);
+        if (episodicCount == 0) {
+            ensureStaticMarkers(player, pool, config);
+            return null;
+        }
 
-        if (player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())) {
-            clearActive(player, pool, config);
+        if (player.hasEffect(DiseaseEffects.TREATMENT_APPLIED.get())
+                || player.hasEffect(DiseaseEffects.SYMPTOMS_MANAGED.get())) {
+            clearEpisodic(player, pool, config);
             pool.nextEpisodeAt = gameTime + severity.scaleInterval(config.minIntervalTicks());
             return null;
         }
@@ -129,38 +85,224 @@ public final class SymptomService {
         if (gameTime < nextAt) return null;
 
         SymptomEntry fired = null;
-        int pick = player.getRandom().nextInt(symptomCount);
+        int pick = player.getRandom().nextInt(episodicCount);
         int bits = config.symptomBits();
         for (int b = 0; b < bits; b++) {
-            if (pool.has(b)) {
-                if (pick == 0) { fired = fire(player, config, b, severity, diseaseEffectForAmp); break; }
-                pick--;
+            if (!pool.has(b) || config.entryAt(b).timing() == SymptomTiming.STATIC) continue;
+            if (pick == 0) {
+                fired = fire(player, config, b, severity, diseaseEffectForAmp);
+                break;
             }
+            pick--;
         }
         pool.nextEpisodeAt = gameTime + scaledInterval(player.getRandom(), config, severity);
         return fired;
     }
 
-    /** Remove any pool-symptom effects currently on the player. Called on cure and under treatment. */
-    public static void clearActive(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config) {
+    /** Tier worsen: swap a random common slot for a newly eligible severe symptom, or fill an open slot. */
+    public static void tryUpgradeIncidental(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
+                                            Severity oldTier, Severity newTier, MobEffect diseaseEffectForAmp) {
+        if (newTier.ordinal() <= oldTier.ordinal()) return;
+        List<Integer> unlocks = new ArrayList<>();
         int bits = config.symptomBits();
         for (int b = 0; b < bits; b++) {
+            if (pool.has(b)) continue;
+            SymptomEntry entry = config.entryAt(b);
+            if (entry.band() != SymptomBand.ADVANCED) continue;
+            if (!entry.band().eligibleAt(newTier)) continue;
+            if (entry.band().eligibleAt(oldTier)) continue;
+            unlocks.add(b);
+        }
+        if (unlocks.isEmpty()) return;
+
+        RandomSource rng = player.getRandom();
+        int severeBit = unlocks.get(rng.nextInt(unlocks.size()));
+
+        List<Integer> commonBits = new ArrayList<>();
+        for (int b = 0; b < bits; b++) {
+            if (pool.has(b) && config.isCommon(b)) commonBits.add(b);
+        }
+
+        if (!commonBits.isEmpty()) {
+            int commonBit = commonBits.get(rng.nextInt(commonBits.size()));
+            clearBit(player, pool, config, commonBit);
+        } else if (pool.count() >= config.thresholds().size()) {
+            return;
+        }
+
+        setPoolBit(player, pool, config, severeBit);
+        SymptomEntry entry = config.entryAt(severeBit);
+        if (entry.timing() != SymptomTiming.STATIC) {
+            fire(player, config, severeBit, newTier, diseaseEffectForAmp);
+        }
+        ensureStaticMarkers(player, pool, config);
+    }
+
+    public static void ensureStaticMarkers(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config) {
+        if (!pool.dirty) return;
+        pool.dirty = false;
+        int bits = config.symptomBits();
+        for (int b = 0; b < bits; b++) {
+            SymptomEntry entry = config.entryAt(b);
+            if (entry.timing() != SymptomTiming.STATIC) continue;
+            MobEffect effect = entry.effect().get();
             if (pool.has(b)) {
-                SymptomEntry entry = config.pool().get(b);
-                MobEffect effect = entry.effect().get();
-                if (player.hasEffect(effect)) {
-                    player.removeEffect(effect);
-                    clearSymptomSideEffect(player, entry.action());
+                if (!player.hasEffect(effect)) {
+                    player.addEffect(new MobEffectInstance(effect, MobEffectInstance.INFINITE_DURATION,
+                            entry.amplifier(), false, false, true));
+                }
+            } else if (player.hasEffect(effect)) {
+                player.removeEffect(effect);
+            }
+        }
+    }
+
+    public static void clearActive(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config) {
+        clearEpisodic(player, pool, config);
+        clearStatic(player, pool, config);
+    }
+
+    public static void clearEpisodic(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config) {
+        int bits = config.symptomBits();
+        for (int b = 0; b < bits; b++) {
+            if (!pool.has(b)) continue;
+            SymptomEntry entry = config.entryAt(b);
+            if (entry.timing() == SymptomTiming.STATIC) continue;
+            MobEffect effect = entry.effect().get();
+            if (player.hasEffect(effect)) {
+                player.removeEffect(effect);
+                clearSymptomSideEffect(player, entry.action());
+            }
+        }
+        BloodyCoughingEffect.clearDamageWindow(player);
+    }
+
+    public static void clearStatic(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config) {
+        int bits = config.symptomBits();
+        for (int b = 0; b < bits; b++) {
+            SymptomEntry entry = config.entryAt(b);
+            if (entry.timing() != SymptomTiming.STATIC) continue;
+            MobEffect effect = entry.effect().get();
+            if (player.hasEffect(effect)) player.removeEffect(effect);
+        }
+    }
+
+    // --- internals ---------------------------------------------------------------------------
+
+    private static int targetCount(SymptomConfig config, double progress, Severity severity) {
+        int target = 0;
+        for (double threshold : config.thresholds()) {
+            if (progress >= threshold) target++;
+        }
+        target = Math.min(target, config.symptomBits());
+        int eligible = 0;
+        for (int b = 0; b < config.symptomBits(); b++) {
+            if (eligible(config, b, severity)) eligible++;
+        }
+        return Math.min(target, eligible);
+    }
+
+    private static int pickNextBit(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config,
+                                   Severity severity, Optional<SourceSymptomSnapshot> source) {
+        for (int b = 0; b < config.hallmarkCount(); b++) {
+            if (!pool.has(b) && eligible(config, b, severity)) return b;
+        }
+        if (source.isPresent()) {
+            SourceSymptomSnapshot snap = source.get();
+            for (int bit : config.inheritableFromSource(snap.config(), snap.sourceMask(), severity, pool.mask)) {
+                return bit;
+            }
+        }
+        List<Integer> candidates = new ArrayList<>();
+        int bits = config.symptomBits();
+        for (int b = config.hallmarkCount(); b < bits; b++) {
+            if (!pool.has(b) && eligible(config, b, severity)) candidates.add(b);
+        }
+        if (candidates.isEmpty()) return -1;
+        return candidates.get(player.getRandom().nextInt(candidates.size()));
+    }
+
+    private static boolean eligible(SymptomConfig config, int bit, Severity severity) {
+        return config.entryAt(bit).band().eligibleAt(severity);
+    }
+
+    private static void setPoolBit(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config, int bit) {
+        SymptomEntry entry = config.entryAt(bit);
+        if (config.isCoughVariant(entry.effect().get())) {
+            clearOtherCoughVariants(player, pool, config, entry.effect().get());
+        }
+        pool.set(bit);
+        pool.dirty = true;
+    }
+
+    private static void clearBit(ServerPlayer player, SymptomPoolComponent pool, SymptomConfig config, int bit) {
+        if (!pool.has(bit)) return;
+        SymptomEntry entry = config.entryAt(bit);
+        pool.clear(bit);
+        pool.dirty = true;
+        MobEffect effect = entry.effect().get();
+        if (player.hasEffect(effect)) {
+            player.removeEffect(effect);
+            clearSymptomSideEffect(player, entry.action());
+        }
+    }
+
+    private static void clearOtherCoughVariants(ServerPlayer player, SymptomPoolComponent pool,
+                                                   SymptomConfig config, MobEffect kept) {
+        for (Supplier<MobEffect> variant : config.coughVariantGroup()) {
+            MobEffect effect = variant.get();
+            if (effect == kept) continue;
+            int bit = config.indexOfEffect(effect);
+            if (bit >= 0) clearBit(player, pool, config, bit);
+        }
+    }
+
+    private static int episodicCount(SymptomPoolComponent pool, SymptomConfig config) {
+        int count = 0;
+        for (int b = 0; b < config.symptomBits(); b++) {
+            if (pool.has(b) && config.entryAt(b).timing() != SymptomTiming.STATIC) count++;
+        }
+        return count;
+    }
+
+    private static SymptomEntry fire(ServerPlayer player, SymptomConfig config, int bit, Severity severity,
+                                     MobEffect diseaseEffectForAmp) {
+        SymptomEntry entry = config.entryAt(bit);
+        int episodeDuration = randomTicks(player.getRandom(),
+                severity.scaleDuration(config.minDurationTicks()),
+                severity.scaleDuration(config.maxDurationTicks()));
+        int amp = entry.amplifier();
+        player.addEffect(new MobEffectInstance(entry.effect().get(), episodeDuration, amp, false, false, true));
+        int impactDuration = entry.durationTicks().orElse(episodeDuration);
+        applyAction(player, entry, impactDuration);
+        entry.sound().ifPresent(sound -> playOnsetSound(player, sound.get(), severity));
+        return entry;
+    }
+
+    private static void applyAction(ServerPlayer player, SymptomEntry entry, int duration) {
+        long gameTime = player.level().getGameTime();
+        switch (entry.action()) {
+            case DRAIN_FOOD -> {
+                FoodData food = player.getFoodData();
+                food.setFoodLevel(Math.max(0, food.getFoodLevel() - VOMIT_FOOD_DROP));
+                food.setSaturation(VOMIT_SATURATION_SET);
+            }
+            case NAUSEA -> player.addEffect(
+                    new MobEffectInstance(MobEffects.CONFUSION, duration, 0, false, false, false));
+            case BREATHLESS -> player.addEffect(
+                    new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 3, false, false, false));
+            case DAMAGE -> {
+                if (entry.effect().get() == DiseaseEffects.BLOODY_COUGHING.get()) {
+                    BloodyCoughingEffect.beginDamageWindow(player, gameTime + duration);
                 }
             }
+            default -> {}
         }
     }
 
     private static void clearSymptomSideEffect(ServerPlayer player, SymptomAction action) {
         switch (action) {
-            case DAMAGE -> {
-                if (player.hasEffect(DiseaseEffects.COUGH_FIT.get())) player.removeEffect(DiseaseEffects.COUGH_FIT.get());
-            }
+            case DAMAGE -> BloodyCoughingEffect.clearDamageWindow(player);
             case NAUSEA -> {
                 if (player.hasEffect(MobEffects.CONFUSION)) player.removeEffect(MobEffects.CONFUSION);
             }
@@ -171,33 +313,6 @@ public final class SymptomService {
         }
     }
 
-    private static SymptomEntry fire(ServerPlayer player, SymptomConfig config, int bit, Severity severity,
-                                     MobEffect diseaseEffectForAmp) {
-        SymptomEntry entry = config.pool().get(bit);
-        // The symptom's marker effect (the HUD icon) always lasts a full tier-scaled episode, like the
-        // other symptoms. Its impactful side effect (nausea, the breathless slow) runs for a shorter
-        // fixed burst when the entry sets durationTicks; otherwise it spans the whole episode.
-        int episodeDuration = randomTicks(player.getRandom(),
-                severity.scaleDuration(config.minDurationTicks()),
-                severity.scaleDuration(config.maxDurationTicks()));
-        int amp;
-        if (entry.feverAmp()) {
-            amp = diseaseEffectForAmp instanceof DiseaseMobEffect dme
-                    ? DiseaseMobEffect.malaiseAmplifierFrom(dme) : 0;
-        } else if (entry.severityAmp()) {
-            amp = Math.max(0, severity.ordinal() - Severity.MILD.ordinal());
-        } else {
-            amp = entry.amplifier();
-        }
-        player.addEffect(new MobEffectInstance(entry.effect().get(), episodeDuration, amp, false, false, true));
-        int impactDuration = entry.durationTicks().orElse(episodeDuration);
-        applyAction(player, entry.action(), impactDuration);
-        entry.sound().ifPresent(sound -> playOnsetSound(player, sound.get(), severity));
-        return entry;
-    }
-
-    /** Plays a symptom's onset sound for everyone nearby (so others hear you cough/sneeze). Higher
-     *  severity is louder and a touch lower-pitched, with small random variation between fires. */
     private static void playOnsetSound(ServerPlayer player, SoundEvent sound, Severity severity) {
         float volume = (float) Math.min(1.0, 0.55 + 0.25 * severity.debuffMult);
         float pitch  = 1.05f - (float) (0.07 * (severity.debuffMult - 1.0))
@@ -210,28 +325,6 @@ public final class SymptomService {
         return randomTicks(rng,
                 severity.scaleInterval(config.minIntervalTicks()),
                 severity.scaleInterval(config.maxIntervalTicks()));
-    }
-
-    private static void applyAction(ServerPlayer player, SymptomAction action, int duration) {
-        switch (action) {
-            case DRAIN_FOOD -> {
-                FoodData food = player.getFoodData();
-                food.setFoodLevel(Math.max(0, food.getFoodLevel() - VOMIT_FOOD_DROP));
-                food.setSaturation(VOMIT_SATURATION_SET);
-            }
-            // Vanilla Nausea I — icon/particles hidden (the headache icon is the visible symptom
-            // marker), but the screen-warp still plays while CONFUSION is present.
-            case NAUSEA -> player.addEffect(
-                    new MobEffectInstance(MobEffects.CONFUSION, duration, 0, false, false, false));
-            // Drastic Slowness (IV ≈ −60%) — icon/particles hidden (the shortness-of-breath icon is
-            // the visible marker); only the brief movement crash is felt.
-            case BREATHLESS -> player.addEffect(
-                    new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 3, false, false, false));
-            // Bad Cough: the hidden COUGH_FIT effect hurts the player once a second for the window.
-            case DAMAGE -> player.addEffect(
-                    new MobEffectInstance(DiseaseEffects.COUGH_FIT.get(), duration, 0, false, false, false));
-            default -> {}
-        }
     }
 
     private static int randomTicks(RandomSource rng, int minTicks, int maxTicks) {

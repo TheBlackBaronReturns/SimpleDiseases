@@ -12,6 +12,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 public final class SymptomPoolComponent implements DiseaseComponent {
     public int  mask;
     public long nextEpisodeAt;
+    /** Set when pool bits change; triggers static-marker sync. Not persisted. */
+    public transient boolean dirty;
 
     public SymptomPoolComponent() {}
 

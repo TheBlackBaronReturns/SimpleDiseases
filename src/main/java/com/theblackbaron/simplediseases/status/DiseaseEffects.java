@@ -505,11 +505,23 @@ public class DiseaseEffects {
     public static final RegistryObject<MobEffect> MOTTLED_SKIN =
             EFFECTS.register("mottled_skin", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x9966AA) {});
 
-    public static final RegistryObject<MobEffect> BAD_COUGH =
-            EFFECTS.register("bad_cough", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x8B3A3A) {});
+    public static final RegistryObject<MobEffect> BLOODY_COUGHING =
+            EFFECTS.register("bloody_coughing", BloodyCoughingEffect::new);
 
-    public static final RegistryObject<MobEffect> COUGH_FIT =
-            EFFECTS.register("cough_fit", CoughFitEffect::new);
+    public static final RegistryObject<MobEffect> TACHYCARDIA =
+            EFFECTS.register("tachycardia", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xCC3333) {});
+
+    public static final RegistryObject<MobEffect> TACHYPNEA =
+            EFFECTS.register("tachypnea", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x6699CC) {});
+
+    public static final RegistryObject<MobEffect> WHEEZING =
+            EFFECTS.register("wheezing", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x88AACC) {});
+
+    public static final RegistryObject<MobEffect> CONFUSION =
+            EFFECTS.register("confusion", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x998877) {});
+
+    public static final RegistryObject<MobEffect> PRODUCTIVE_COUGHING =
+            EFFECTS.register("productive_coughing", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xA0522D) {});
 
     public static final RegistryObject<MobEffect> BLEEDING =
             EFFECTS.register("bleeding", BleedingEffect::new);

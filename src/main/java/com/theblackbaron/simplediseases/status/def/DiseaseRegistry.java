@@ -39,20 +39,32 @@ public final class DiseaseRegistry {
     private static List<DiseaseDef> complicationList  = List.of();
     private static List<DiseaseDef> bacterialList     = List.of();
 
+    private static final List<Double> DEFAULT_THRESHOLDS = List.of(0.10, 0.40, 0.70);
+
+    private static SymptomConfig symptomConfig(List<SymptomEntry> hallmarks, List<SymptomEntry> common,
+                                                List<SymptomEntry> severe,
+                                                int minInterval, int maxInterval, int minDuration, int maxDuration,
+                                                PersistentEffects persistent) {
+        return new SymptomConfig(hallmarks, common, severe, List.of(), DEFAULT_THRESHOLDS,
+                minInterval, maxInterval, minDuration, maxDuration, persistent);
+    }
+
     public static void bootstrap() {
         if (!BY_ID.isEmpty()) return;
 
         register(new ViralDiseaseDef(
             COLD, 3, () -> DiseaseParticles.COLD.get(), GROUP_VIRAL,
             2.0, 1.0, 0.000030, 24000L,
-            new SymptomConfig(
+            symptomConfig(
+                List.of(),
                 List.of(
                     new SymptomEntry(DiseaseEffects.COUGH,    SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
                     new SymptomEntry(DiseaseEffects.SNEEZING, SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE)
+                    new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE)
                 ),
-                List.of(0.10, 0.40, 0.70),
-                20 * 120, 20 * 300, 20 * 30, 20 * 60
+                List.of(),
+                20 * 120, 20 * 300, 20 * 30, 20 * 60,
+                PersistentEffects.malaiseOnly()
             ),
             new ViralContagion(6.0, 0.167f, 0.05, 115, 0.10f, 0.25f, 0.35f, 24000, 24000, 0.05f, 0.0f, true, true),
             AcquisitionRule.defaultDisease(),
@@ -63,18 +75,26 @@ public final class DiseaseRegistry {
         register(new ViralDiseaseDef(
             FLU, 4, () -> DiseaseParticles.FLU.get(), GROUP_VIRAL,
             10.0, 1.0, 0.000030, 48000L,
-            new SymptomConfig(
+            symptomConfig(
+                List.of(),
                 List.of(
-                    new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE,       () -> DiseaseSounds.COUGH.get()),
-                    new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE,       () -> DiseaseSounds.SNEEZE.get()),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
+                    new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
+                    new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
                     new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
-                    new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE),
-                    new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get(), Severity.SEVERE),
-                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS, () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.SEVERE, 200)
+                    new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE)
                 ),
-                List.of(0.10, 0.40, 0.70),
-                20 * 60, 20 * 180, 20 * 45, 20 * 90
+                List.of(
+                    new SymptomEntry(DiseaseEffects.VOMITING, SymptomAction.DRAIN_FOOD,
+                            () -> DiseaseSounds.VOMIT.get(), SymptomBand.ADVANCED),
+                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.ADVANCED, 200),
+                    new SymptomEntry(DiseaseEffects.TACHYPNEA, SymptomAction.NONE,
+                            () -> DiseaseSounds.RAPID_BREATHING.get(), SymptomBand.ADVANCED),
+                    new SymptomEntry(DiseaseEffects.TACHYCARDIA, SymptomAction.NONE,
+                            () -> DiseaseSounds.HEARTBEAT.get(), SymptomBand.ADVANCED)
+                ),
+                20 * 60, 20 * 180, 20 * 45, 20 * 90,
+                PersistentEffects.malaiseOnly()
             ),
             new ViralContagion(6.0, 0.334f, 0.10, 20, 0.20f, 0.70f, 0.80f, 24000, 24000, 0.0f, 0.0f, true, true),
             new AcquisitionRule(false, true, false, 0.6, 0.0),
@@ -85,14 +105,22 @@ public final class DiseaseRegistry {
         register(new ViralDiseaseDef(
             RSV, 3, () -> DiseaseParticles.RSV.get(), GROUP_VIRAL,
             10.0, 1.0, 0.000030, 36000L,
-            new SymptomConfig(
+            symptomConfig(
+                List.of(
+                    new SymptomEntry(DiseaseEffects.WHEEZING, SymptomAction.NONE, () -> DiseaseSounds.WHEEZING_SOUND.get())
+                ),
                 List.of(
                     new SymptomEntry(DiseaseEffects.COUGH,    SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
-                    new SymptomEntry(DiseaseEffects.SNEEZING, SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE)
+                    new SymptomEntry(DiseaseEffects.SNEEZING, SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get())
                 ),
-                List.of(0.10, 0.40, 0.70),
-                20 * 90, 20 * 210, 20 * 40, 20 * 80
+                List.of(
+                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.ADVANCED, 200),
+                    new SymptomEntry(DiseaseEffects.TACHYPNEA, SymptomAction.NONE,
+                            () -> DiseaseSounds.RAPID_BREATHING.get(), SymptomBand.ADVANCED)
+                ),
+                20 * 90, 20 * 210, 20 * 40, 20 * 80,
+                PersistentEffects.malaiseOnly()
             ),
             new ViralContagion(6.0, 0.334f, 0.10, 20, 0.20f, 0.70f, 0.80f, 24000, 24000, 0.0f, 0.15f, true, true),
             new AcquisitionRule(false, false, true, 0.20, 0.40),
@@ -103,16 +131,17 @@ public final class DiseaseRegistry {
         register(new ViralDiseaseDef(
             NOROVIRUS, 3, () -> DiseaseParticles.NOROVIRUS.get(), GROUP_VIRAL,
             2.0, 1.0, 0.00006, 6000L,
-            new SymptomConfig(
+            symptomConfig(
+                List.of(),
                 List.of(
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
                     new SymptomEntry(DiseaseEffects.HEADACHE,       SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.VOMITING,       SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get()),
                     new SymptomEntry(DiseaseEffects.DIARRHEA,       SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.DIARRHEA.get()),
                     new SymptomEntry(DiseaseEffects.STOMACH_CRAMPS, SymptomAction.NONE, () -> DiseaseSounds.STOMACH_CRAMPS.get())
                 ),
-                List.of(0.10, 0.40, 0.70),
-                20 * 45, 20 * 120, 20 * 30, 20 * 60
+                List.of(),
+                20 * 45, 20 * 120, 20 * 30, 20 * 60,
+                PersistentEffects.malaiseOnly()
             ),
             new ViralContagion(8.0, 0.50f, 0.15, 12, 0.20f, 0.85f, 0.90f, 24000, 24000, 0.0f, 0.0f, false, false),
             new AcquisitionRule(false, false, false, 0.0, 0.0),
@@ -123,19 +152,30 @@ public final class DiseaseRegistry {
         // Pneumonia: viral complication (flu/cold/rsv source), 4 tiers, stochastic momentum worsening.
         register(new ComplicationDiseaseDef(
             PNEUMONIA, 4, GROUP_VIRAL, 10.0, 1.0, 20L * 60 * 15, 20L * 60 * 30,
-            new SymptomConfig(
+            symptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.BAD_COUGH,           SymptomAction.DAMAGE,     () -> DiseaseSounds.COUGH.get(), Severity.LIGHT, 100),
-                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,  () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.LIGHT, 200),
-                    new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE,       () -> DiseaseSounds.COUGH.get()),
-                    new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE,       () -> DiseaseSounds.SNEEZE.get()),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
+                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.COMMON, 200),
+                    new SymptomEntry(DiseaseEffects.BLOODY_COUGHING, SymptomAction.DAMAGE,
+                            () -> DiseaseSounds.COUGH.get(), SymptomBand.COMMON, 100)
+                ),
+                List.of(
+                    new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
+                    new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
                     new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE),
-                    new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get())
+                    new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get()),
+                    new SymptomEntry(DiseaseEffects.PRODUCTIVE_COUGHING, SymptomAction.NONE, () -> DiseaseSounds.COUGH.get())
                 ),
-                List.of(0.10, 0.40, 0.70),
-                20 * 30, 20 * 90, 20 * 30, 20 * 60
+                List.of(
+                    new SymptomEntry(DiseaseEffects.TACHYPNEA, SymptomAction.NONE,
+                            () -> DiseaseSounds.RAPID_BREATHING.get(), SymptomBand.ADVANCED),
+                    new SymptomEntry(DiseaseEffects.TACHYCARDIA, SymptomAction.NONE,
+                            () -> DiseaseSounds.HEARTBEAT.get(), SymptomBand.ADVANCED),
+                    new SymptomEntry(DiseaseEffects.CONFUSION, SymptomAction.NONE, SymptomBand.ADVANCED)
+                ),
+                20 * 30, 20 * 90, 20 * 30, 20 * 60,
+                PersistentEffects.withPain(1)
             ),
             "message.simplediseases.caught_pneumonia", "message.simplediseases.cured_pneumonia",
             // Viral gate, stochastic momentum worsening
@@ -150,18 +190,25 @@ public final class DiseaseRegistry {
         // Bronchitis: viral complication (flu/cold/rsv source), 3 tiers, stochastic momentum worsening.
         register(new ComplicationDiseaseDef(
             BRONCHITIS, 3, GROUP_VIRAL, 10.0, 1.0, 20L * 60 * 15, 20L * 60 * 30,
-            new SymptomConfig(
+            symptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS, () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.LIGHT, 200),
-                    new SymptomEntry(DiseaseEffects.COUGH,               SymptomAction.NONE,       () -> DiseaseSounds.COUGH.get(), Severity.LIGHT),
-                    new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE,       () -> DiseaseSounds.SNEEZE.get()),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
+                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.COMMON, 200)
+                ),
+                List.of(
+                    new SymptomEntry(DiseaseEffects.COUGH,       SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
+                    new SymptomEntry(DiseaseEffects.SNEEZING,    SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
                     new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE),
-                    new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get())
+                    new SymptomEntry(DiseaseEffects.VOMITING,    SymptomAction.DRAIN_FOOD, () -> DiseaseSounds.VOMIT.get()),
+                    new SymptomEntry(DiseaseEffects.PRODUCTIVE_COUGHING, SymptomAction.NONE, () -> DiseaseSounds.COUGH.get())
                 ),
-                List.of(0.10, 0.40, 0.70),
-                20 * 30, 20 * 90, 20 * 30, 20 * 60
+                List.of(
+                    new SymptomEntry(DiseaseEffects.TACHYPNEA, SymptomAction.NONE,
+                            () -> DiseaseSounds.RAPID_BREATHING.get(), SymptomBand.ADVANCED)
+                ),
+                20 * 30, 20 * 90, 20 * 30, 20 * 60,
+                PersistentEffects.withPain(0)
             ),
             "message.simplediseases.caught_bronchitis", "message.simplediseases.cured_bronchitis",
             // Viral gate, stochastic momentum worsening
@@ -180,15 +227,20 @@ public final class DiseaseRegistry {
             1.0 / 12000.0,
             1.0 / 9000.0,
             List.of(4.0 / 3.0, 5.0 / 3.0),
-            new SymptomConfig(
+            symptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.SHARP_PAIN, SymptomAction.NONE,
-                            Optional.empty(), Severity.LIGHT, Optional.empty(), false, 1, false),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
-                    new SymptomEntry(DiseaseEffects.LOCALIZED_REDNESS, SymptomAction.NONE)
+                    new SymptomEntry(DiseaseEffects.LOCALIZED_REDNESS, SymptomAction.NONE, SymptomTiming.STATIC)
                 ),
-                List.of(0.1, 0.4, 0.7),
-                20 * 60, 20 * 180, 20 * 30, 20 * 90
+                List.of(),
+                List.of(
+                    new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.ADVANCED, 200),
+                    new SymptomEntry(DiseaseEffects.TACHYCARDIA, SymptomAction.NONE,
+                            () -> DiseaseSounds.HEARTBEAT.get(), SymptomBand.ADVANCED),
+                    new SymptomEntry(DiseaseEffects.CONFUSION, SymptomAction.NONE, SymptomBand.ADVANCED)
+                ),
+                20 * 60, 20 * 180, 20 * 30, 20 * 90,
+                PersistentEffects.withPain(1)
             ),
             "message.simplediseases.caught_cellulitis",
             "message.simplediseases.cured_cellulitis",
@@ -199,15 +251,18 @@ public final class DiseaseRegistry {
         // worsening drives toward Debilitating, which gates MOF.
         register(new ComplicationDiseaseDef(
             SEPSIS_STAPH, 4, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
-            new SymptomConfig(
+            symptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.HYPOTENSION,    SymptomAction.BREATHLESS,  () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), Severity.LIGHT, 200),
-                    new SymptomEntry(DiseaseEffects.SHARP_PAIN,     SymptomAction.NONE,        Optional.empty(), Severity.LIGHT, Optional.empty(), false, 2, false),
-                    SymptomEntry.withFeverAmp(DiseaseEffects.MALAISE, SymptomAction.NONE),
-                    new SymptomEntry(DiseaseEffects.MOTTLED_SKIN,   SymptomAction.NONE,        Severity.MODERATE)
+                    new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.COMMON, 200)
                 ),
-                List.of(0.1, 0.4, 0.7),
-                20 * 90, 20 * 240, 20 * 45, 20 * 120
+                List.of(),
+                List.of(
+                    new SymptomEntry(DiseaseEffects.MOTTLED_SKIN, SymptomAction.NONE,
+                            SymptomBand.ADVANCED, SymptomTiming.STATIC)
+                ),
+                20 * 90, 20 * 240, 20 * 45, 20 * 120,
+                PersistentEffects.withPain(2)
             ),
             "message.simplediseases.caught_sepsis",
             "message.simplediseases.cured_sepsis",
@@ -223,7 +278,7 @@ public final class DiseaseRegistry {
         // applies direct lethal damage at Wither-I rate until the player dies or is cured.
         register(new ComplicationDiseaseDef(
             MOF_STAPH, 1, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
-            new SymptomConfig(List.of(), List.of(), 0, 0, 0, 0),
+            SymptomConfig.empty(),
             "message.simplediseases.caught_mof",
             "message.simplediseases.cured_mof",
             Optional.of("sepsis_staph"),         // triggeredBy

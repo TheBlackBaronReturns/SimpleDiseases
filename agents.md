@@ -104,7 +104,7 @@ Rolled once at first latch. Honey reduces tier: 35% base, ×0.5 per prior succes
 
 - **Tooltip:** `EffectRendererMixin` injects colored fever label under JEED `"potion.whenDrank"` (`require = 0`).
 - **Cold Sweat WORLD modifiers:** `FeverWorldTempModifier` (+) and `SepticShockTempModifier` (−) synced each tick via `ColdSweatCompat.syncDiseaseWorldModifiers`.
-- **Malaise scaling:** `SymptomEntry.withFeverAmp()` sets malaise amplifier from active disease tier via `DiseaseMobEffect.malaiseAmplifierFrom()` (fever/shock → amp 0–3).
+- **Malaise scaling:** `PersistentEffectService` applies infinite malaise while latched; amp = max `DiseaseMobEffect.malaiseAmplifierFrom()` across latched disease variants (fever/shock → amp 0–3).
 
 ---
 
@@ -127,27 +127,32 @@ Categories call `ctx.suppressRecovery(group)` before draining progress (`ViralCa
 
 ## Symptom System
 
-Episodic `MobEffectInstance`s via `SymptomService` + `SymptomPoolComponent`. Configured per disease in `SymptomConfig` / `SymptomEntry`.
+Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **commonAdds**, **severe** (`SymptomBand.ADVANCED`), plus **persistentEffects** (malaise + Sharp Pain via `PersistentEffectService`). Episodic rotation via `SymptomService` + `SymptomPoolComponent` (3 threshold slots: 0.10 / 0.40 / 0.70).
 
-### SymptomEntry flags
+### SymptomEntry fields
 
-| Flag | Effect |
+| Field | Effect |
 |---|---|
-| `minSeverity` | Minimum rolled tier to enter pool |
-| `severityAmp` | Episode amplifier scales with illness tier |
-| `feverAmp` | Malaise amplifier from disease fever/shock tier |
-| `amplifier` | Fixed episode amplifier (e.g. sepsis Sharp Pain = 2) |
-| `durationTicks` | Shorter impact window (NAUSEA, BREATHLESS, DAMAGE) |
+| `band` | `COMMON` (any tier) or `ADVANCED` (Severe+ to draw; sticky once in pool) |
+| `timing` | `EPISODIC` (random episodes) or `STATIC` (infinite marker — Localized Redness, Mottled Skin) |
+| `durationTicks` | Shorter impact window (NAUSEA, BREATHLESS, Bloody Coughing DAMAGE) |
+| `amplifier` | Fixed episode amplifier when needed |
+
+**Cough-variant exclusion:** Cough, Bloody Coughing, and Productive Coughing are mutually exclusive per disease pool.
+
+**Complication inheritance:** Pre-latch `syncPool` inherits matching source symptoms from the viral source roster.
 
 ### Symptom Actions
 
 | Action | On episode fire |
 |---|---|
-| `NONE` | Apply marker effect only |
-| `DAMAGE` | 0.5 HP (`COUGH_FIT` for bad cough) |
+| `NONE` | Apply marker effect only (Confusion = HUD only, no NAUSEA yet) |
+| `DAMAGE` | Bloody Coughing: magic 1♥/s for `durationTicks` via `BloodyCoughingEffect` NBT window |
 | `DRAIN_FOOD` | −3 food, saturation → 0 (vomiting/diarrhea) |
-| `NAUSEA` | Vanilla Confusion for duration |
+| `NAUSEA` | Vanilla Confusion for duration (Headache) |
 | `BREATHLESS` | Slowness IV (~60% slow) for duration |
+
+**Treatment (interim):** Broth/honey suppress episodic firing only (`SYMPTOMS_MANAGED` / `TREATMENT_APPLIED`); pool bits, static markers, and persistent effects remain.
 
 ### Symptom-Driven Interactions (`SymptomEvents`)
 
@@ -181,7 +186,7 @@ Persisted in `PlayerInjuryState` (NBT under `"injury"` on player). Ticked from `
 
 **Lacerating** sources (≥ **4 HP** dealt): player/mob sharp weapons, arrows/tridents, mob bites. Tiered roll by armor (10/7/4/2% unarmored→heavy); high-damage bypass lowers effective armor tier; heavy armor + axe/crossbow bonus rolls.
 
-On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding, **immediate Sharp Pain I** (20–40 s), then episodic Sharp Pain I every 45–90 s until cellulitis latches or `Treatment Applied`.
+On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding. **Sharp Pain I** is applied continuously via `PersistentEffectService` while the wound is open (until cellulitis latches).
 
 ### Internal bleeding
 
@@ -284,9 +289,10 @@ All on `EntityType.PLAYER`, syncable `RangedAttribute`:
 
 | Context | Amplifier | Display |
 |---|---|---|
-| Open flesh wound (episodic) | 0 | Sharp Pain I |
-| Cellulitis (persistent symptom) | 1 | Sharp Pain II |
-| Sepsis (persistent symptom) | 2 | Sharp Pain III |
+| Open flesh wound (persistent) | 0 | Sharp Pain I |
+| Bronchitis (persistent) | 0 | Sharp Pain I |
+| Pneumonia / Cellulitis (persistent) | 1 | Sharp Pain II |
+| Sepsis (persistent) | 2 | Sharp Pain III |
 
 Sleep blocked at amp ≥ 2.
 
