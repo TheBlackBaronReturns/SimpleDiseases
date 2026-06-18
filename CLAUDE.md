@@ -43,7 +43,7 @@ The mod is structured around an **ECS-lite disease model**:
 |---|---|
 | `event/DiseaseEvents.java` | Per-tick: acquisition, progression, symptoms, complication gating |
 | `event/CureEvents.java` | Treatment items (broths, honey) + sleep recovery |
-| `event/SymptomEvents.java` | Symptom-driven interactions (sore throat blocks eating, stomach cramps block healing, pain blocks sleep) |
+| `event/SymptomEvents.java` | Symptom-driven interactions (sore throat eat damage, stomach cramps block healing, pain blocks sleep) |
 | `status/manager/ContagionManager` | Player↔player, player↔villager, villager↔villager transmission; committed incubation model |
 | `status/manager/WetnessManager` | `wetProgress` accumulation from rain/water; drives Damp respiratory exposure |
 | `status/manager/WaterborneManager` | Deterministic 32×32 infected reservoir regions for Norovirus |
@@ -61,6 +61,26 @@ The mod is structured around an **ECS-lite disease model**:
 - `GROUP_BACTERIAL` (`"bacterial"`) — Cellulitis. Only one active at a time.
 
 Exclusion is enforced at the `NULLIFY_THRESHOLD` (0.05 progress) boundary inside `ContagionManager`.
+
+## Disease Symptom Pools
+
+All nine diseases and their hallmark / common / severe / persistent symptom configs are documented in **agents.md → Disease Symptom Pools**. Source of truth: `DiseaseRegistry.bootstrap()`.
+
+Quick index:
+
+| ID | Hallmarks | Common | Severe (ADV) | Persistent |
+|---|---|---|---|---|
+| `cold` | — | Cough, Sneezing, Sore Throat | — | Malaise |
+| `flu` | — | Cough, Sneezing, Headache, Sore Throat | Vomiting, SOB, Tachypnea, Tachycardia | Malaise |
+| `rsv` | Wheezing | Cough, Sneezing | SOB, Tachypnea | Malaise |
+| `norovirus` | — | Headache, Vomiting, Diarrhea, Stomach Cramps | — | Malaise |
+| `pneumonia` | SOB, Bloody Coughing | 6 inherit-capable virals | Tachypnea, Tachycardia, Confusion | Malaise + Pain II |
+| `bronchitis` | SOB | 6 inherit-capable virals | Tachypnea | Malaise + Pain I |
+| `cellulitis_staph` | Localized Redness (static) | — | Hypotension, Tachycardia, Confusion | Malaise + Pain II |
+| `sepsis_staph` | Hypotension | Redness (static, inherit-only), Confusion, Tachycardia, Tachypnea | SOB (inherit-only), Mottled Skin (static) | Malaise + Pain III |
+| `mof_staph` | — | — | — | Empty pool; lethal tick damage |
+
+Sepsis exclusive pair: Localized Redness ↔ Mottled Skin. See agents.md for actions, timing, inheritance, and episode pacing.
 
 ## Key Conventions
 

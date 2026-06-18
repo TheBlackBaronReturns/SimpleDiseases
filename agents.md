@@ -75,6 +75,104 @@ Full per-disease parameters live in `DiseaseRegistry.bootstrap()`. Quick referen
 
 ---
 
+## Disease Symptom Pools
+
+Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thresholds **0.10 / 0.40 / 0.70** (up to 3 episodic slots) unless noted. **Persistent** effects are outside the pool (always on while latched via `PersistentEffectService`).
+
+**Legend:** *static* = `SymptomTiming.STATIC` (HUD marker while in pool); *inherit-only* = `SymptomEntry.inheritOnly` (pool entry only via complication inheritance, never random); *inherit-capable* = listed in complication `commonAdds` for source matching; **ADV** = `SymptomBand.ADVANCED` (Severe+ to draw).
+
+### `cold` — Viral · 3 tiers
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | — |
+| Common | Coughing; Runny Nose; Sore Throat |
+| Severe (ADV) | — |
+| Persistent | Malaise |
+| Episode pacing | 120–300 s interval · 30–60 s duration |
+
+### `flu` — Viral · 4 tiers
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | — |
+| Common | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat |
+| Severe (ADV) | Vomiting (`DRAIN_FOOD`); Shortness of Breath (`BREATHLESS`, 200 ticks); Tachypnea; Tachycardia |
+| Persistent | Malaise |
+| Episode pacing | 60–180 s · 45–90 s |
+
+### `rsv` — Viral · 3 tiers
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | Wheezing |
+| Common | Coughing; Runny Nose |
+| Severe (ADV) | Shortness of Breath (`BREATHLESS`, 200 ticks); Tachypnea |
+| Persistent | Malaise |
+| Episode pacing | 90–210 s · 40–80 s |
+
+### `norovirus` — Viral · 3 tiers
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | — |
+| Common | Headache (`NAUSEA`, 200 ticks); Vomiting (`DRAIN_FOOD`); Diarrhea (`DRAIN_FOOD`); Stomach Cramps |
+| Severe (ADV) | — |
+| Persistent | Malaise |
+| Episode pacing | 45–120 s · 30–60 s |
+
+### `pneumonia` — Viral complication · 4 tiers · source: cold / flu / rsv
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | Shortness of Breath (`BREATHLESS`, 200 ticks); Bloody Coughing (`DAMAGE`, 100 ticks) |
+| Common (*inherit-capable*) | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat; Vomiting (`DRAIN_FOOD`); Productive Coughing |
+| Severe (ADV) | Tachypnea; Tachycardia; Confusion |
+| Persistent | Malaise + Pain II |
+| Episode pacing | 30–90 s · 30–60 s |
+
+### `bronchitis` — Viral complication · 3 tiers · source: cold / flu / rsv
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | Shortness of Breath (`BREATHLESS`, 200 ticks) |
+| Common (*inherit-capable*) | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat; Vomiting (`DRAIN_FOOD`); Productive Coughing |
+| Severe (ADV) | Tachypnea |
+| Persistent | Malaise + Pain I |
+| Episode pacing | 30–90 s · 30–60 s |
+
+### `cellulitis_staph` — Bacterial · 3 tiers · wound-seeded
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | Localized Redness (*static*) |
+| Common | — |
+| Severe (ADV) | Hypotension (`BREATHLESS`, 200 ticks); Tachycardia; Confusion |
+| Persistent | Malaise + Pain II |
+| Episode pacing | 60–180 s · 30–90 s |
+
+### `sepsis_staph` — Bacterial complication · 4 tiers · triggered by severe cellulitis at cap
+
+| Layer | Symptoms |
+|---|---|
+| Hallmarks | Hypotension (`BREATHLESS`, 200 ticks) |
+| Common | Localized Redness (*static*, *inherit-only*); Confusion; Tachycardia; Tachypnea |
+| Severe (ADV) | Shortness of Breath (`BREATHLESS`, 200 ticks, *inherit-only*); Mottled Skin (*static*) |
+| Exclusive pairs | Localized Redness ↔ Mottled Skin (bidirectional; adding one clears the other from pool) |
+| Persistent | Malaise + Pain III |
+| Episode pacing | 90–240 s · 45–120 s |
+
+Pre-latch: inherits matching active symptoms from cellulitis (e.g. redness from cellulitis hallmark). Post-latch: no new inheritance.
+
+### `mof_staph` — Bacterial complication · 1 tier · triggered by Debilitating sepsis
+
+| Layer | Symptoms |
+|---|---|
+| Pool | **Empty** (`SymptomConfig.empty()`) |
+| Direct effect | 1 magic damage / 40 ticks while latched (Wither-I rate) |
+
+---
+
 ## Severity Scale
 
 Five tiers; diseases use a **window** centered on MODERATE.
@@ -137,10 +235,13 @@ Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **c
 | `timing` | `EPISODIC` (random episodes) or `STATIC` (infinite marker — Localized Redness, Mottled Skin) |
 | `durationTicks` | Shorter impact window (NAUSEA, BREATHLESS, Bloody Coughing DAMAGE) |
 | `amplifier` | Fixed episode amplifier when needed |
+| `inheritOnly` | If true, enters pool only via complication inheritance — excluded from random draws and tier-worsen upgrades |
 
 **Cough-variant exclusion:** Cough, Bloody Coughing, and Productive Coughing are mutually exclusive per disease pool.
 
-**Complication inheritance:** Pre-latch `syncPool` inherits matching source symptoms from the viral source roster.
+**Exclusive pairs:** `SymptomSupersedes` entries in `SymptomConfig.exclusivePairs` — bidirectional pool exclusion (e.g. sepsis Localized Redness ↔ Mottled Skin). Cleared when the paired symptom is added to the pool.
+
+**Complication inheritance:** Pre-latch `syncPool` inherits matching active source symptoms by `MobEffect` identity when the destination lists the same effect. Fill order per slot: destination hallmarks → inheritance → random common/severe. `inheritOnly` symptoms are eligible for inheritance but never drawn incidentally.
 
 ### Symptom Actions
 
@@ -158,7 +259,7 @@ Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **c
 
 | Trigger | Behavior |
 |---|---|
-| Sore Throat + eat | Cancel eat; actionbar message |
+| Sore Throat + eat | 0.5 HP magic damage per hunger point restored (on finish); actionbar message |
 | Stomach Cramps + heal ≤ 1 HP (no Regen) | Cancel heal |
 | Pain amp ≥ 2 + sleep | Block sleep |
 | Active norovirus tier | Cap saturation at `disease_max_saturation` |
