@@ -1,5 +1,6 @@
 package com.theblackbaron.simplediseases.status;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.ai.attributes.Attribute;
@@ -11,7 +12,8 @@ import java.util.UUID;
 
 /**
  * MobEffect subclass that adds a chainable modifier() helper for building per-tier disease effects.
- * Icon textures are provided per-tier as standard atlas PNGs (simplediseases:textures/mob_effect/<regName>.png).
+ * Tier variants share one icon per disease path (simplediseases:textures/mob_effect/&lt;diseasePath&gt;.png);
+ * the client remaps sprite lookup via {@link #sharedIconId}.
  */
 public class DiseaseMobEffect extends MobEffect {
 
@@ -40,6 +42,7 @@ public class DiseaseMobEffect extends MobEffect {
 
     private double feverOffset = 0.0;
     private double shockOffset = 0.0;
+    private ResourceLocation sharedIconId;
 
     // LinkedHashMap preserves insertion order so JEED renders modifiers in the order modifier() is called.
     private final LinkedHashMap<Attribute, AttributeModifier> orderedModifiers = new LinkedHashMap<>();
@@ -78,6 +81,16 @@ public class DiseaseMobEffect extends MobEffect {
 
     public double getShockOffset() {
         return shockOffset;
+    }
+
+    /** Sets the shared atlas sprite id for all tiers of this disease path; chainable. */
+    DiseaseMobEffect sharedIcon(ResourceLocation iconId) {
+        this.sharedIconId = iconId;
+        return this;
+    }
+
+    public ResourceLocation getSharedIconId() {
+        return sharedIconId;
     }
 
     /** Maps disease fever/shock tier to malaise MobEffect amplifier (display levels 1–4 → amp 0–3). */

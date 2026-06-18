@@ -7,7 +7,9 @@
   "mixins": [],
   "client": [
     "EffectRendererMixin",
-    "LivingEntityRendererMixin"
+    "LivingEntityRendererMixin",
+    "MobEffectTextureManagerMixin",
+    "TextureAtlasHolderInvoker"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -35,8 +35,6 @@ public class DiseaseEffects {
     private static final Map<String, EnumMap<Severity, RegistryObject<MobEffect>>> BRONCHITIS_VARIANTS = new HashMap<>();
     // keyed by complication path e.g. "sepsis_staph"
     private static final Map<String, EnumMap<Severity, RegistryObject<MobEffect>>> SEPSIS_VARIANTS     = new HashMap<>();
-    // keyed by complication path e.g. "mof_staph"
-    private static final Map<String, EnumMap<Severity, RegistryObject<MobEffect>>> MOF_VARIANTS        = new HashMap<>();
 
     static {
         // Cold — 3 tiers (Mild/Moderate/Severe). Severe tier: light fever.
@@ -124,8 +122,7 @@ public class DiseaseEffects {
             )
         );
 
-        // Multiple organ failure — 1-tier (MODERATE only). No fever; lethality via direct damage.
-        registerMof("mof_staph");
+        // Multiple organ failure — single-tier; registered as MOF below (not via registerVariants).
     }
 
     // --- Registration helpers -----------------------------------------------------------------------
@@ -150,7 +147,8 @@ public class DiseaseEffects {
             double feverOffset = feverOffsets.getOrDefault(sev, 0.0);
             double shockOffset = shockOffsets.getOrDefault(sev, 0.0);
             RegistryObject<MobEffect> variant = EFFECTS.register(regName, () -> {
-                DiseaseMobEffect effect = new DiseaseMobEffect(MobEffectCategory.HARMFUL, color);
+                DiseaseMobEffect effect = new DiseaseMobEffect(MobEffectCategory.HARMFUL, color)
+                        .sharedIcon(ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, path));
                 for (BaseMod m : baseMods) {
                     UUID uuid = UUID.nameUUIDFromBytes((regName + ":" + m.key()).getBytes(StandardCharsets.UTF_8));
                     effect.modifier(m.attribute().get(), uuid, m.amount() * sev.debuffMult, m.op());
@@ -202,10 +200,6 @@ public class DiseaseEffects {
         SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, baseMods, feverOffsets, shockOffsets));
     }
 
-    private static void registerMof(String path) {
-        MOF_VARIANTS.put(path, registerVariants(path, 0x1A0A2A, 1, List.of()));
-    }
-
     // --- Public variant lookups ---------------------------------------------------------------------
 
     public static RegistryObject<MobEffect> variant(String diseasePath, Severity severity) {
@@ -223,10 +217,7 @@ public class DiseaseEffects {
     }
 
     public static RegistryObject<MobEffect> mofVariant(ResourceLocation sourceId, Severity severity) {
-        EnumMap<Severity, RegistryObject<MobEffect>> byTier = MOF_VARIANTS.get(mofPath(sourceId));
-        RegistryObject<MobEffect> variant = byTier == null ? null : byTier.get(Severity.MODERATE);
-        if (variant != null) return variant;
-        return MOF_VARIANTS.get("mof_staph").get(Severity.MODERATE);
+        return MOF;
     }
 
     public static RegistryObject<MobEffect> pneumoniaVariant(ResourceLocation sourceId, Severity severity) {
@@ -393,14 +384,9 @@ public class DiseaseEffects {
     }
 
     public static void removeOtherMofVariants(LivingEntity e, ResourceLocation keepSourceId, Severity keepSeverity) {
-        MobEffect keep = keepSourceId == null || keepSeverity == null
-                ? null : mofVariant(keepSourceId, keepSeverity).get();
-        for (EnumMap<Severity, RegistryObject<MobEffect>> byTier : MOF_VARIANTS.values()) {
-            for (RegistryObject<MobEffect> effect : byTier.values()) {
-                MobEffect mobEffect = effect.get();
-                if (mobEffect != keep && e.hasEffect(mobEffect)) e.removeEffect(mobEffect);
-            }
-        }
+        MobEffect keep = keepSourceId == null || keepSeverity == null ? null : MOF.get();
+        MobEffect mobEffect = MOF.get();
+        if (mobEffect != keep && e.hasEffect(mobEffect)) e.removeEffect(mobEffect);
     }
 
     public static void removeOtherPneumoniaVariants(LivingEntity e, ResourceLocation keepSourceId, Severity keepSeverity) {
@@ -453,14 +439,7 @@ public class DiseaseEffects {
     }
 
     private static String sepsisPath(ResourceLocation sourceId) {
-        return switch (sourceId.getPath()) {
-            case "cellulitis_staph" -> "sepsis_staph";
-            default                 -> "sepsis_staph";
-        };
-    }
-
-    private static String mofPath(ResourceLocation sourceId) {
-        return "mof_staph";
+        return "sepsis_staph";
     }
 
     // --- Indicators, symptoms, immune tiers ---------------------------------------------------------
@@ -538,13 +517,17 @@ public class DiseaseEffects {
     public static final RegistryObject<MobEffect> LOCALIZED_REDNESS =
             EFFECTS.register("localized_redness", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xCC4422) {});
 
-    public static final RegistryObject<MobEffect> SHARP_PAIN =
-            EFFECTS.register("sharp_pain", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0xAA2244)
-                    .modifier(Attributes.ATTACK_SPEED,                  UUID.nameUUIDFromBytes("sharp_pain:attack_speed".getBytes(StandardCharsets.UTF_8)),       -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(Attributes.ATTACK_DAMAGE,                 UUID.nameUUIDFromBytes("sharp_pain:attack_damage".getBytes(StandardCharsets.UTF_8)),      -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(DiseaseAttributes.BLOCK_BREAK_SPEED.get(), UUID.nameUUIDFromBytes("sharp_pain:block_break_speed".getBytes(StandardCharsets.UTF_8)), -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(DiseaseAttributes.KNOCKBACK_FACTOR.get(),  UUID.nameUUIDFromBytes("sharp_pain:knockback_factor".getBytes(StandardCharsets.UTF_8)),  -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("sharp_pain:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL));
+    public static final RegistryObject<MobEffect> MOF =
+            EFFECTS.register("mof", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0x1A0A2A)
+                    .sharedIcon(ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, "mof")));
+
+    public static final RegistryObject<MobEffect> PAIN =
+            EFFECTS.register("pain", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0xAA2244)
+                    .modifier(Attributes.ATTACK_SPEED,                  UUID.nameUUIDFromBytes("pain:attack_speed".getBytes(StandardCharsets.UTF_8)),       -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(Attributes.ATTACK_DAMAGE,                 UUID.nameUUIDFromBytes("pain:attack_damage".getBytes(StandardCharsets.UTF_8)),      -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(DiseaseAttributes.BLOCK_BREAK_SPEED.get(), UUID.nameUUIDFromBytes("pain:block_break_speed".getBytes(StandardCharsets.UTF_8)), -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(DiseaseAttributes.KNOCKBACK_FACTOR.get(),  UUID.nameUUIDFromBytes("pain:knockback_factor".getBytes(StandardCharsets.UTF_8)),  -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
+                    .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("pain:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL));
 
     public static final RegistryObject<MobEffect> SYMPTOMS_MANAGED =
             EFFECTS.register("symptoms_managed", () -> new MobEffect(MobEffectCategory.BENEFICIAL, 0xFFD080) {});

@@ -6,7 +6,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-/** Infinite malaise and/or Sharp Pain applied while a disease is latched — not in the symptom pool. */
+/** Infinite malaise and/or Pain applied while a disease is latched — not in the symptom pool. */
 public record PersistentEffects(boolean malaise, OptionalInt painAmplifier) {
 
     public static final PersistentEffects NONE = new PersistentEffects(false, OptionalInt.empty());

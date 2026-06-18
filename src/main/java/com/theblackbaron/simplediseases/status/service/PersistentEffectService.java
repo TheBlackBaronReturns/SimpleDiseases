@@ -18,7 +18,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 
 /**
- * Applies infinite malaise and unified Sharp Pain once per player tick from latched diseases and
+ * Applies infinite malaise and unified Pain once per player tick from latched diseases and
  * open flesh wounds.
  */
 public final class PersistentEffectService {
@@ -26,7 +26,7 @@ public final class PersistentEffectService {
 
     public static void syncForPlayer(ServerPlayer player, PlayerDiseaseState state) {
         syncMalaise(player, state);
-        syncSharpPain(player, state);
+        syncPain(player, state);
     }
 
     private static void syncMalaise(ServerPlayer player, PlayerDiseaseState state) {
@@ -52,7 +52,7 @@ public final class PersistentEffectService {
         applyIfNeeded(player, DiseaseEffects.MALAISE.get(), Math.max(0, bestAmp));
     }
 
-    private static void syncSharpPain(ServerPlayer player, PlayerDiseaseState state) {
+    private static void syncPain(ServerPlayer player, PlayerDiseaseState state) {
         int bestAmp = -1;
         if (state.injury().fleshWoundSeverity() >= 0 && !state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) {
             bestAmp = Math.max(bestAmp, 0);
@@ -67,10 +67,10 @@ public final class PersistentEffectService {
             bestAmp = Math.max(bestAmp, symptoms.persistentEffects().painAmplifier().getAsInt());
         }
         if (bestAmp < 0) {
-            player.removeEffect(DiseaseEffects.SHARP_PAIN.get());
+            player.removeEffect(DiseaseEffects.PAIN.get());
             return;
         }
-        applyIfNeeded(player, DiseaseEffects.SHARP_PAIN.get(), bestAmp);
+        applyIfNeeded(player, DiseaseEffects.PAIN.get(), bestAmp);
     }
 
     private static MobEffect variantFor(PlayerDiseaseState state, DiseaseDef def, ResourceLocation id) {

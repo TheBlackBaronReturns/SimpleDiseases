@@ -31,7 +31,7 @@ com.theblackbaron.simplediseases
 ├── command/SdCommands.java       — /sd* debug and admin commands
 ├── compat/                       — Cold Sweat + Serene Seasons (never call mods elsewhere)
 ├── event/                        — DiseaseEvents, CureEvents, SymptomEvents
-├── mixin/                        — JEED fever tooltips, shivering, frostbite suppress
+├── mixin/                        — JEED fever tooltips, shivering, frostbite suppress, shared disease icons
 ├── network/                      — BleedingSplatterPacket + NetworkHandler
 ├── particle/                     — DiseaseParticles registry + DiseaseParticleEmitter
 ├── sound/DiseaseSounds.java
@@ -69,9 +69,9 @@ Full per-disease parameters live in `DiseaseRegistry.bootstrap()`. Quick referen
 | `norovirus` | Viral | 3 | Waterborne reservoirs; max-saturation debuff; puddles |
 | `pneumonia` | Complication | 4 | Flu/Cold/RSV source; bad cough + breathless |
 | `bronchitis` | Complication | 3 | Flu/Cold/RSV source |
-| `cellulitis_staph` | Bacterial | 3 | Wound-seeded; Sharp Pain II persistent |
-| `sepsis_staph` | Complication | 4 | Cellulitis trigger; Sharp Pain III; no passive recovery |
-| `mof_staph` | Complication | 1 | Lethal Wither-rate damage from septic shock |
+| `cellulitis_staph` | Bacterial | 3 | Wound-seeded; Pain II persistent |
+| `sepsis_staph` | Complication | 4 | Cellulitis trigger; Pain III; no passive recovery |
+| `mof_staph` | Complication | 1 | Lethal Wither-rate damage; status effect `mof` |
 
 ---
 
@@ -127,7 +127,7 @@ Categories call `ctx.suppressRecovery(group)` before draining progress (`ViralCa
 
 ## Symptom System
 
-Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **commonAdds**, **severe** (`SymptomBand.ADVANCED`), plus **persistentEffects** (malaise + Sharp Pain via `PersistentEffectService`). Episodic rotation via `SymptomService` + `SymptomPoolComponent` (3 threshold slots: 0.10 / 0.40 / 0.70).
+Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **commonAdds**, **severe** (`SymptomBand.ADVANCED`), plus **persistentEffects** (malaise + Pain via `PersistentEffectService`). Episodic rotation via `SymptomService` + `SymptomPoolComponent` (3 threshold slots: 0.10 / 0.40 / 0.70).
 
 ### SymptomEntry fields
 
@@ -160,7 +160,7 @@ Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **c
 |---|---|
 | Sore Throat + eat | Cancel eat; actionbar message |
 | Stomach Cramps + heal ≤ 1 HP (no Regen) | Cancel heal |
-| Sharp Pain amp ≥ 2 + sleep | Block sleep |
+| Pain amp ≥ 2 + sleep | Block sleep |
 | Active norovirus tier | Cap saturation at `disease_max_saturation` |
 | Malaise on player | Scale jump via `disease_jump_factor` on `LivingJumpEvent` |
 
@@ -186,7 +186,7 @@ Persisted in `PlayerInjuryState` (NBT under `"injury"` on player). Ticked from `
 
 **Lacerating** sources (≥ **4 HP** dealt): player/mob sharp weapons, arrows/tridents, mob bites. Tiered roll by armor (10/7/4/2% unarmored→heavy); high-damage bypass lowers effective armor tier; heavy armor + axe/crossbow bonus rolls.
 
-On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding. **Sharp Pain I** is applied continuously via `PersistentEffectService` while the wound is open (until cellulitis latches).
+On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding. **Pain I** is applied continuously via `PersistentEffectService` while the wound is open (until cellulitis latches).
 
 ### Internal bleeding
 
@@ -203,6 +203,14 @@ Per-second chance while flesh wound open (pre-latch cellulitis), scaled by wound
 ---
 
 ## Visual Effects
+
+### Shared disease status icons
+
+Per-tier disease `MobEffect`s still register separately (gameplay modifiers, fever, tier swapping unchanged), but **all tiers of the same disease path share one HUD/inventory icon**:
+
+- **Assets:** one PNG per disease path under `textures/mob_effect/` (e.g. `flu.png`, `pneumonia_flu.png`, `mof.png`) — 13 disease files instead of 42 tier-specific files. Symptom/indicator effects remain one PNG per registry name (`pain.png`, `cough.png`, etc.).
+- **Registration:** `DiseaseEffects.registerVariants()` sets `DiseaseMobEffect.sharedIconId` to `simplediseases:<path>`.
+- **Client:** `MobEffectTextureManagerMixin` redirects atlas sprite lookup to the shared id. MOF registers as a single effect `mof` (not `mof_staph_moderate`).
 
 ### Bleeding particles (Majrusz parity)
 
@@ -277,24 +285,24 @@ All on `EntityType.PLAYER`, syncable `RangedAttribute`:
 | Name | Default | Used by |
 |---|---|---|
 | `disease_max_saturation` | 5.0 | Norovirus (ADDITION) |
-| `disease_knockback_factor` | 1.0 | Cellulitis, Sharp Pain |
-| `disease_block_break_speed` | 1.0 | Respiratory diseases, Sharp Pain |
+| `disease_knockback_factor` | 1.0 | Cellulitis, Pain |
+| `disease_block_break_speed` | 1.0 | Respiratory diseases, Pain |
 | `disease_jump_factor` | 1.0 | Malaise |
 
 ---
 
-## Sharp Pain Tiers
+## Pain Tiers
 
-`DiseaseMobEffect` with −10% `MULTIPLY_TOTAL` on attack speed, attack damage, mining speed, knockback, movement speed (scaled by amp + 1).
+`DiseaseEffects.PAIN` (`pain`) — `DiseaseMobEffect` with −10% `MULTIPLY_TOTAL` on attack speed, attack damage, mining speed, knockback, movement speed (scaled by amp + 1).
 
 | Context | Amplifier | Display |
 |---|---|---|
-| Open flesh wound (persistent) | 0 | Sharp Pain I |
-| Bronchitis (persistent) | 0 | Sharp Pain I |
-| Pneumonia / Cellulitis (persistent) | 1 | Sharp Pain II |
-| Sepsis (persistent) | 2 | Sharp Pain III |
+| Open flesh wound (persistent) | 0 | Pain I |
+| Bronchitis (persistent) | 0 | Pain I |
+| Pneumonia / Cellulitis (persistent) | 1 | Pain II |
+| Sepsis (persistent) | 2 | Pain III |
 
-Sleep blocked at amp ≥ 2.
+Sleep blocked at amp ≥ 2 (`message.simplediseases.pain_no_sleep`).
 
 ---
 
@@ -332,7 +340,8 @@ Contagion villager exposure is in-memory only.
 
 - Register via `DeferredRegister` only (`DiseaseEffects.EFFECTS`, etc.) — never direct Forge registries.
 - New diseases → `DiseaseRegistry.bootstrap()` with appropriate def type.
-- Tier variants → `DiseaseEffects.registerVariants()`; fever via `.fever()`, not attributes.
+- Tier variants → `DiseaseEffects.registerVariants()`; fever via `.fever()`, not attributes. Set `.sharedIcon()` to the disease path for shared HUD icons.
+- MOF → single registered effect `DiseaseEffects.MOF` (`mof`), not a tier variant map.
 - Complications → `triggeredBy` source required; progress gated on active source.
 - Symptom episodes → `SymptomService` only; add to `SymptomConfig`, not manual tick applies.
 - Compat → `ColdSweatCompat` / `SereneSeasonsCompat` exclusively.

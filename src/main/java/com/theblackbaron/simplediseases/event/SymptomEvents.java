@@ -51,16 +51,16 @@ public class SymptomEvents {
     }
 
     /**
-     * Sharp Pain tier 3 (amplifier >= 2) blocks sleep.
+     * Pain tier 3 (amplifier >= 2) blocks sleep.
      */
     @SubscribeEvent
     public void onSleepAttempt(PlayerSleepInBedEvent event) {
-        MobEffectInstance pain = event.getEntity().getEffect(DiseaseEffects.SHARP_PAIN.get());
+        MobEffectInstance pain = event.getEntity().getEffect(DiseaseEffects.PAIN.get());
         if (pain == null || pain.getAmplifier() < 2) return;
         event.setResult(Player.BedSleepingProblem.OTHER_PROBLEM);
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             serverPlayer.displayClientMessage(
-                    Component.translatable("message.simplediseases.sharp_pain_no_sleep"), true);
+                    Component.translatable("message.simplediseases.pain_no_sleep"), true);
         }
     }
 

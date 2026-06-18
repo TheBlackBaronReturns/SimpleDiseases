@@ -46,7 +46,7 @@
   "effect.simplediseases.sepsis_staph_severe": "Severe Sepsis (S. Aureus)",
   "effect.simplediseases.sepsis_staph_debilitating": "Debilitating Sepsis (S. Aureus)",
 
-  "effect.simplediseases.mof_staph_moderate": "Multiple Organ Failure",
+  "effect.simplediseases.mof": "Multiple Organ Failure",
 
   "effect.simplediseases.damp": "Drenched",
   "effect.simplediseases.chilly_wind": "Chilling Wind",
@@ -73,7 +73,7 @@
   "effect.simplediseases.productive_coughing": "Productive Coughing",
   "effect.simplediseases.localized_redness": "Localized Redness",
   "effect.simplediseases.mottled_skin": "Mottled Skin",
-  "effect.simplediseases.sharp_pain": "Sharp Pain",
+  "effect.simplediseases.pain": "Pain",
 
   "effect.simplediseases.symptoms_managed": "Symptoms Managed",
   "effect.simplediseases.treatment_applied": "Treatment Successful",
@@ -114,7 +114,7 @@
   "message.simplediseases.sepsis_staph_worsens": "Your sepsis is progressing.",
   "message.simplediseases.caught_mof": "Your organs are beginning to fail.",
   "message.simplediseases.cured_mof": "Your organs stabilize.",
-  "message.simplediseases.sharp_pain_no_sleep": "The pain is too intense to sleep.",
+  "message.simplediseases.pain_no_sleep": "The pain is too intense to sleep.",
 
 "simplediseases.fever.light":  "§eMild Fever (38°C)",
 "simplediseases.fever.mild":   "§6High Fever (39°C)",
