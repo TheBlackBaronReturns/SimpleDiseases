@@ -109,6 +109,7 @@ public final class SymptomService {
             if (pool.has(b)) continue;
             SymptomEntry entry = config.entryAt(b);
             if (entry.band() != SymptomBand.ADVANCED) continue;
+            if (entry.inheritOnly()) continue;
             if (!entry.band().eligibleAt(newTier)) continue;
             if (entry.band().eligibleAt(oldTier)) continue;
             unlocks.add(b);
@@ -216,7 +217,11 @@ public final class SymptomService {
         List<Integer> candidates = new ArrayList<>();
         int bits = config.symptomBits();
         for (int b = config.hallmarkCount(); b < bits; b++) {
-            if (!pool.has(b) && eligible(config, b, severity)) candidates.add(b);
+            if (pool.has(b)) continue;
+            SymptomEntry entry = config.entryAt(b);
+            if (entry.inheritOnly()) continue;
+            if (!eligible(config, b, severity)) continue;
+            candidates.add(b);
         }
         if (candidates.isEmpty()) return -1;
         return candidates.get(player.getRandom().nextInt(candidates.size()));
@@ -231,6 +236,10 @@ public final class SymptomService {
         if (config.isCoughVariant(entry.effect().get())) {
             clearOtherCoughVariants(player, pool, config, entry.effect().get());
         }
+        config.exclusivePeer(entry.effect().get()).ifPresent(peer -> {
+            int peerBit = config.indexOfEffect(peer);
+            if (peerBit >= 0) clearBit(player, pool, config, peerBit);
+        });
         pool.set(bit);
         pool.dirty = true;
     }

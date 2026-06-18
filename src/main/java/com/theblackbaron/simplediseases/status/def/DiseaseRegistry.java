@@ -45,7 +45,16 @@ public final class DiseaseRegistry {
                                                 List<SymptomEntry> severe,
                                                 int minInterval, int maxInterval, int minDuration, int maxDuration,
                                                 PersistentEffects persistent) {
-        return new SymptomConfig(hallmarks, common, severe, List.of(), DEFAULT_THRESHOLDS,
+        return symptomConfig(hallmarks, common, severe, List.of(), minInterval, maxInterval,
+                minDuration, maxDuration, persistent);
+    }
+
+    private static SymptomConfig symptomConfig(List<SymptomEntry> hallmarks, List<SymptomEntry> common,
+                                                List<SymptomEntry> severe,
+                                                List<SymptomSupersedes> exclusivePairs,
+                                                int minInterval, int maxInterval, int minDuration, int maxDuration,
+                                                PersistentEffects persistent) {
+        return new SymptomConfig(hallmarks, common, severe, exclusivePairs, DEFAULT_THRESHOLDS,
                 minInterval, maxInterval, minDuration, maxDuration, persistent);
     }
 
@@ -256,11 +265,22 @@ public final class DiseaseRegistry {
                     new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.BREATHLESS,
                             () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.COMMON, 200)
                 ),
-                List.of(),
                 List.of(
+                    new SymptomEntry(DiseaseEffects.LOCALIZED_REDNESS, SymptomAction.NONE,
+                            SymptomBand.COMMON, SymptomTiming.STATIC, true),
+                    new SymptomEntry(DiseaseEffects.CONFUSION, SymptomAction.NONE),
+                    new SymptomEntry(DiseaseEffects.TACHYCARDIA, SymptomAction.NONE,
+                            () -> DiseaseSounds.HEARTBEAT.get()),
+                    new SymptomEntry(DiseaseEffects.TACHYPNEA, SymptomAction.NONE,
+                            () -> DiseaseSounds.RAPID_BREATHING.get())
+                ),
+                List.of(
+                    new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
+                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.ADVANCED, 200, true),
                     new SymptomEntry(DiseaseEffects.MOTTLED_SKIN, SymptomAction.NONE,
                             SymptomBand.ADVANCED, SymptomTiming.STATIC)
                 ),
+                List.of(new SymptomSupersedes(DiseaseEffects.LOCALIZED_REDNESS, DiseaseEffects.MOTTLED_SKIN)),
                 20 * 90, 20 * 240, 20 * 45, 20 * 120,
                 PersistentEffects.withPain(2)
             ),

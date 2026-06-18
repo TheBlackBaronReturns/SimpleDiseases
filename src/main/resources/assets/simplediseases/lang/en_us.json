@@ -115,6 +115,7 @@
   "message.simplediseases.caught_mof": "Your organs are beginning to fail.",
   "message.simplediseases.cured_mof": "Your organs stabilize.",
   "message.simplediseases.pain_no_sleep": "The pain is too intense to sleep.",
+  "message.simplediseases.sore_throat_eat": "Swallowing sends a sharp pain through your throat.",
 
 "simplediseases.fever.light":  "§eMild Fever (38°C)",
 "simplediseases.fever.mild":   "§6High Fever (39°C)",

@@ -19,39 +19,50 @@ public record SymptomEntry(
     SymptomBand band,
     SymptomTiming timing,
     Optional<Integer> durationTicks,
-    int amplifier
+    int amplifier,
+    boolean inheritOnly
 ) {
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action) {
-        this(effect, action, Optional.empty(), SymptomBand.COMMON, SymptomTiming.EPISODIC, Optional.empty(), 0);
+        this(effect, action, Optional.empty(), SymptomBand.COMMON, SymptomTiming.EPISODIC, Optional.empty(), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, int durationTicks) {
-        this(effect, action, Optional.empty(), SymptomBand.COMMON, SymptomTiming.EPISODIC, Optional.of(durationTicks), 0);
+        this(effect, action, Optional.empty(), SymptomBand.COMMON, SymptomTiming.EPISODIC, Optional.of(durationTicks), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound) {
-        this(effect, action, Optional.of(sound), SymptomBand.COMMON, SymptomTiming.EPISODIC, Optional.empty(), 0);
+        this(effect, action, Optional.of(sound), SymptomBand.COMMON, SymptomTiming.EPISODIC, Optional.empty(), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, SymptomBand band) {
-        this(effect, action, Optional.empty(), band, SymptomTiming.EPISODIC, Optional.empty(), 0);
+        this(effect, action, Optional.empty(), band, SymptomTiming.EPISODIC, Optional.empty(), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound, SymptomBand band) {
-        this(effect, action, Optional.of(sound), band, SymptomTiming.EPISODIC, Optional.empty(), 0);
+        this(effect, action, Optional.of(sound), band, SymptomTiming.EPISODIC, Optional.empty(), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound,
                           SymptomBand band, int durationTicks) {
-        this(effect, action, Optional.of(sound), band, SymptomTiming.EPISODIC, Optional.of(durationTicks), 0);
+        this(effect, action, Optional.of(sound), band, SymptomTiming.EPISODIC, Optional.of(durationTicks), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, SymptomTiming timing) {
-        this(effect, action, Optional.empty(), SymptomBand.COMMON, timing, Optional.empty(), 0);
+        this(effect, action, Optional.empty(), SymptomBand.COMMON, timing, Optional.empty(), 0, false);
     }
 
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, SymptomBand band, SymptomTiming timing) {
-        this(effect, action, Optional.empty(), band, timing, Optional.empty(), 0);
+        this(effect, action, Optional.empty(), band, timing, Optional.empty(), 0, false);
+    }
+
+    public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, SymptomBand band,
+                          SymptomTiming timing, boolean inheritOnly) {
+        this(effect, action, Optional.empty(), band, timing, Optional.empty(), 0, inheritOnly);
+    }
+
+    public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound,
+                          SymptomBand band, int durationTicks, boolean inheritOnly) {
+        this(effect, action, Optional.of(sound), band, SymptomTiming.EPISODIC, Optional.of(durationTicks), 0, inheritOnly);
     }
 
     public static final Codec<SymptomEntry> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -61,6 +72,7 @@ public record SymptomEntry(
         SymptomBand.CODEC.optionalFieldOf("band", SymptomBand.COMMON).forGetter(SymptomEntry::band),
         SymptomTiming.CODEC.optionalFieldOf("timing", SymptomTiming.EPISODIC).forGetter(SymptomEntry::timing),
         Codec.INT.optionalFieldOf("duration_ticks").forGetter(SymptomEntry::durationTicks),
-        Codec.INT.optionalFieldOf("amplifier", 0).forGetter(SymptomEntry::amplifier)
+        Codec.INT.optionalFieldOf("amplifier", 0).forGetter(SymptomEntry::amplifier),
+        Codec.BOOL.optionalFieldOf("inherit_only", false).forGetter(SymptomEntry::inheritOnly)
     ).apply(i, SymptomEntry::new));
 }

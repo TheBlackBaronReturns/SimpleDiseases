@@ -10,6 +10,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -25,15 +27,34 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  */
 public class SymptomEvents {
 
-    /** Sore Throat blocks eating: cancel the start of any edible item's use while the effect is active. */
+    /** Half a heart of magic damage per hunger point restored by the meal. */
+    private static final float SORE_THROAT_DAMAGE_PER_NUTRITION = 0.5f;
+
+    /**
+     * Sore Throat punishes swallowing: eating still works, but larger meals deal more throat pain
+     * once the bite is finished (after hunger is applied).
+     */
     @SubscribeEvent
-    public void onUseItemStart(LivingEntityUseItemEvent.Start event) {
-        if (!event.getEntity().hasEffect(DiseaseEffects.SORE_THROAT.get())) return;
-        if (!event.getItem().getItem().isEdible()) return;
-        event.setCanceled(true);
-        if (event.getEntity() instanceof ServerPlayer player) {
-            player.displayClientMessage(Component.literal("§7Your throat is too sore to eat."), true);
+    public void onUseItemFinish(LivingEntityUseItemEvent.Finish event) {
+        LivingEntity entity = event.getEntity();
+        if (!entity.hasEffect(DiseaseEffects.SORE_THROAT.get())) return;
+        if (!(entity instanceof ServerPlayer player)) return;
+        if (player.isCreative() || player.isSpectator()) return;
+
+        ItemStack stack = event.getItem();
+        if (!stack.getItem().isEdible()) return;
+        FoodProperties food = stack.getItem().getFoodProperties(stack, player);
+        if (food == null) return;
+
+        int nutrition = food.getNutrition();
+        if (nutrition <= 0) return;
+
+        float damage = nutrition * SORE_THROAT_DAMAGE_PER_NUTRITION;
+        if (damage > 0.0f) {
+            player.hurt(player.damageSources().magic(), damage);
         }
+        player.displayClientMessage(
+                Component.translatable("message.simplediseases.sore_throat_eat"), true);
     }
 
     /**

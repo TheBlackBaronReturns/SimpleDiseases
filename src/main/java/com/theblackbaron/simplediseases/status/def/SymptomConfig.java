@@ -7,6 +7,7 @@ import net.minecraft.world.effect.MobEffect;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -93,11 +94,15 @@ public record SymptomConfig(
         return -1;
     }
 
-    public boolean isInheritBlocked(MobEffect effect) {
+    /** Bidirectional pool exclusion partner for {@code effect}, if configured in {@link #exclusivePairs}. */
+    public Optional<MobEffect> exclusivePeer(MobEffect effect) {
         for (SymptomSupersedes pair : exclusivePairs) {
-            if (pair.common().get() == effect) return true;
+            MobEffect a = pair.common().get();
+            MobEffect b = pair.advanced().get();
+            if (a == effect) return Optional.of(b);
+            if (b == effect) return Optional.of(a);
         }
-        return false;
+        return Optional.empty();
     }
 
     public boolean isCoughVariant(MobEffect effect) {
@@ -131,7 +136,6 @@ public record SymptomConfig(
         for (int sb = 0; sb < bits; sb++) {
             if ((sourceMask & (1 << sb)) == 0) continue;
             MobEffect sourceEffect = sourceConfig.entryAt(sb).effect().get();
-            if (isInheritBlocked(sourceEffect)) continue;
             int destBit = indexOfEffect(sourceEffect);
             if (destBit < 0) continue;
             if ((destMask & (1 << destBit)) != 0) continue;
