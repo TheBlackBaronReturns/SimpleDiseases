@@ -28,4 +28,10 @@ public class DiseaseParticles {
 
     public static final RegistryObject<SimpleParticleType> VOMIT =
             PARTICLES.register("vomiting", () -> new SimpleParticleType(false));
+
+    public static final RegistryObject<SimpleParticleType> BLOODY_COUGH =
+            PARTICLES.register("bloody_cough", () -> new SimpleParticleType(false));
+
+    public static final RegistryObject<SimpleParticleType> SPUTUM =
+            PARTICLES.register("sputum", () -> new SimpleParticleType(false));
 }

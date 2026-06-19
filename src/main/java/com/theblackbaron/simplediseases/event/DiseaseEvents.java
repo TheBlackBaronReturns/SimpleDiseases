@@ -32,6 +32,7 @@ import com.theblackbaron.simplediseases.status.manager.WaterborneManager;
 import com.theblackbaron.simplediseases.status.manager.WetnessManager;
 import com.theblackbaron.simplediseases.status.manager.WindchillManager;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -64,6 +65,7 @@ public class DiseaseEvents {
     private static final double NULLIFY_THRESHOLD       = 0.05;
     private static final int    RESERVOIR_PARTICLE_INTERVAL = 8;
     private static final int    VOMIT_PARTICLE_TICKS        = 40;
+    private static final int[]  COUGH_BURST_OFFSETS         = { 0, 8, 17, 26 };
 
     private final Map<UUID, PlayerDiseaseState> states                = new HashMap<>();
     private final WetnessManager                wetnessManager        = new WetnessManager();
@@ -79,6 +81,9 @@ public class DiseaseEvents {
     private final Map<UUID, Long>               windchillCachedAt     = new HashMap<>();
     private final Map<UUID, Long>               vomitParticleUntil    = new HashMap<>();
     private final Map<UUID, Integer>            lastVomitingDuration  = new HashMap<>();
+    private final Map<UUID, CoughBurstSchedule> coughBurstSchedules   = new HashMap<>();
+    private final Map<UUID, Integer>            lastBloodyCoughDuration     = new HashMap<>();
+    private final Map<UUID, Integer>            lastProductiveCoughDuration = new HashMap<>();
 
     public ContagionManager  getContagionManager()       { return contagionManager; }
     public FluSeasonManager  getFluSeasonManager()        { return fluSeasonManager; }
@@ -105,6 +110,9 @@ public class DiseaseEvents {
         windchillCachedAt.remove(pid);
         vomitParticleUntil.remove(pid);
         lastVomitingDuration.remove(pid);
+        coughBurstSchedules.remove(pid);
+        lastBloodyCoughDuration.remove(pid);
+        lastProductiveCoughDuration.remove(pid);
         DiseaseParticleEmitter.clearVomitEmitState(pid);
         contagionManager.onPlayerLogout(pid);
     }
@@ -158,6 +166,7 @@ public class DiseaseEvents {
         wetnessManager.tick(player, state);
         injuryManager.tick(player, state);
         tickVomitParticles(player, gameTime);
+        tickCoughParticles(player, gameTime);
         boolean isDamp = player.hasEffect(DiseaseEffects.DAMP.get());
 
         boolean reservoirActive = false;
@@ -666,6 +675,60 @@ public class DiseaseEvents {
         } else {
             lastVomitingDuration.remove(uuid);
         }
+    }
+
+    private void tickCoughParticles(ServerPlayer player, long gameTime) {
+        UUID uuid = player.getUUID();
+
+        MobEffectInstance bloody = player.getEffect(DiseaseEffects.BLOODY_COUGHING.get());
+        if (bloody != null) {
+            int dur = bloody.getDuration();
+            int prev = lastBloodyCoughDuration.getOrDefault(uuid, 0);
+            if (dur > prev + 10) {
+                scheduleCoughBursts(uuid, gameTime, DiseaseParticles.BLOODY_COUGH.get());
+            }
+            lastBloodyCoughDuration.put(uuid, dur);
+        } else {
+            lastBloodyCoughDuration.remove(uuid);
+        }
+
+        MobEffectInstance productive = player.getEffect(DiseaseEffects.PRODUCTIVE_COUGHING.get());
+        if (productive != null) {
+            int dur = productive.getDuration();
+            int prev = lastProductiveCoughDuration.getOrDefault(uuid, 0);
+            if (dur > prev + 10) {
+                scheduleCoughBursts(uuid, gameTime, DiseaseParticles.SPUTUM.get());
+            }
+            lastProductiveCoughDuration.put(uuid, dur);
+        } else {
+            lastProductiveCoughDuration.remove(uuid);
+        }
+
+        CoughBurstSchedule schedule = coughBurstSchedules.get(uuid);
+        if (schedule == null) return;
+
+        while (schedule.nextBurstIndex < COUGH_BURST_OFFSETS.length
+                && gameTime >= schedule.startTick + COUGH_BURST_OFFSETS[schedule.nextBurstIndex]) {
+            DiseaseParticleEmitter.emitCoughSplatter(player, schedule.particle);
+            schedule.nextBurstIndex++;
+        }
+        if (schedule.nextBurstIndex >= COUGH_BURST_OFFSETS.length) {
+            coughBurstSchedules.remove(uuid);
+        }
+    }
+
+    private void scheduleCoughBursts(UUID uuid, long gameTime, ParticleOptions particle) {
+        CoughBurstSchedule schedule = new CoughBurstSchedule();
+        schedule.startTick = gameTime;
+        schedule.nextBurstIndex = 0;
+        schedule.particle = particle;
+        coughBurstSchedules.put(uuid, schedule);
+    }
+
+    private static final class CoughBurstSchedule {
+        long startTick;
+        int nextBurstIndex;
+        ParticleOptions particle;
     }
 
     private void saveToPlayer(ServerPlayer player) {

@@ -2,6 +2,7 @@ package com.theblackbaron.simplediseases.particle;
 
 import com.theblackbaron.simplediseases.status.manager.PlayerInjuryState;
 import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -68,6 +69,20 @@ public final class DiseaseParticleEmitter {
         double speed = Mth.lerp(player.getRandom().nextFloat(), 0.025D, 0.075D);
         int count = 2 + player.getRandom().nextInt(3);
         level.sendParticles(DiseaseParticles.VOMIT.get(),
+                player.getX(), player.getY() + player.getBbHeight() * 0.35D, player.getZ(),
+                count, spreadX, spreadY, spreadZ, speed);
+    }
+
+    /** Single staggered cough splatter — 1–2 particles at mouth height. */
+    public static void emitCoughSplatter(ServerPlayer player, ParticleOptions particle) {
+        if (!(player.level() instanceof ServerLevel level)) return;
+
+        double spreadX = player.getBbWidth() * 0.25D;
+        double spreadY = player.getBbHeight() * 0.10D;
+        double spreadZ = player.getBbWidth() * 0.25D;
+        double speed = Mth.lerp(player.getRandom().nextFloat(), 0.025D, 0.075D);
+        int count = 1 + player.getRandom().nextInt(2);
+        level.sendParticles(particle,
                 player.getX(), player.getY() + player.getBbHeight() * 0.35D, player.getZ(),
                 count, spreadX, spreadY, spreadZ, speed);
     }

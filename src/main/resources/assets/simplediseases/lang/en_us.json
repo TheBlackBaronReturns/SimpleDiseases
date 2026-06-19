@@ -123,9 +123,9 @@
 "simplediseases.fever.severe": "§4Hyperpyrexia (≥41°C)",
 "simplediseases.shock": "§dSeptic Shock (<36.0°C)",
 
-"simplediseases.pain.0": "§6Mild Pain",
-"simplediseases.pain.1": "§cSerious Pain",
-"simplediseases.pain.2": "§4Excruciating Pain",
+"simplediseases.pain.0": "§6Mild Pain (I)",
+"simplediseases.pain.1": "§cSerious Pain (II)",
+"simplediseases.pain.2": "§4Excruciating Pain (III)",
 
 "simplediseases.symptom.cough": "Cough",
 "simplediseases.symptom.sneezing": "Runny Nose",

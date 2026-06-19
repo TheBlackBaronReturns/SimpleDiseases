@@ -301,6 +301,18 @@ public class DiseaseEffects {
         return false;
     }
 
+    public static boolean hasTachycardia(LivingEntity e) {
+        return e.hasEffect(TACHYCARDIA.get());
+    }
+
+    public static boolean hasTachypnea(LivingEntity e) {
+        return e.hasEffect(TACHYPNEA.get());
+    }
+
+    public static boolean hasStomachCramps(LivingEntity e) {
+        return e.hasEffect(STOMACH_CRAMPS.get());
+    }
+
     /** True when JEED should show the fever line for this effect on the given entity. */
     public static boolean shouldShowFeverTooltip(LivingEntity entity, DiseaseMobEffect effect) {
         if (effect.getFeverOffset() <= 0.0) return false;
@@ -495,7 +507,7 @@ public class DiseaseEffects {
     public static final RegistryObject<MobEffect> MALAISE =
             EFFECTS.register("malaise", () -> new DiseaseMobEffect(MobEffectCategory.NEUTRAL, 0x6E6B7A)
                     .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("malaise:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-                    .modifier(DiseaseAttributes.JUMP_FACTOR.get(),      UUID.nameUUIDFromBytes("malaise:jump_factor".getBytes(StandardCharsets.UTF_8)),       -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL));
+                    .modifier(DiseaseAttributes.JUMP_FACTOR.get(),      UUID.nameUUIDFromBytes("malaise:jump_factor".getBytes(StandardCharsets.UTF_8)),       DiseaseMobEffect.MALAISE_JUMP_DEBUFF, AttributeModifier.Operation.MULTIPLY_TOTAL));
 
     public static final RegistryObject<MobEffect> VOMITING =
             EFFECTS.register("vomiting", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x6B8E23) {});
@@ -504,7 +516,7 @@ public class DiseaseEffects {
             EFFECTS.register("shortness_of_breath", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x7FA8C9) {});
 
     public static final RegistryObject<MobEffect> HYPOTENSION =
-            EFFECTS.register("hypotension", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x7090B0) {});
+            EFFECTS.register("hypotension", HypotensionEffect::new);
 
     public static final RegistryObject<MobEffect> HEADACHE =
             EFFECTS.register("headache", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x9B4B4B) {});

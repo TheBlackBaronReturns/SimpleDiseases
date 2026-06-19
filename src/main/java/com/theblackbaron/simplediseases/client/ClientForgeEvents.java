@@ -1,6 +1,7 @@
 package com.theblackbaron.simplediseases.client;
 
 import com.mojang.datafixers.util.Either;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.theblackbaron.simplediseases.client.tooltip.IconTextTooltipComponent;
 import com.theblackbaron.simplediseases.client.tooltip.IconTextTooltipRenderer;
 import com.theblackbaron.simplediseases.SimpleDiseases;
@@ -35,11 +36,50 @@ public class ClientForgeEvents {
 
     @SubscribeEvent
     public static void onRenderOverlayPre(RenderGuiOverlayEvent.Pre event) {
-        if (!event.getOverlay().id().equals(VanillaGuiOverlay.FROSTBITE.id())) return;
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
+
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.FOOD_LEVEL.id())) {
+            if (DiseaseEffects.hasStomachCramps(player)) {
+                RenderSystem.setShaderColor(1.0F, 0.35F, 0.35F, 1.0F);
+            }
+            if (DiseaseEffects.hasTachypnea(player)) {
+                event.getGuiGraphics().pose().pushPose();
+                event.getGuiGraphics().pose().translate(0.0F, -TachypneaLungOverlay.foodRowShift(), 0.0F);
+            }
+        }
+
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.AIR_LEVEL.id())
+                && DiseaseEffects.hasTachypnea(player)) {
+            event.setCanceled(true);
+            return;
+        }
+
+        if (!event.getOverlay().id().equals(VanillaGuiOverlay.FROSTBITE.id())) return;
         if (DiseaseEffects.hasShiveringDisease(player)) {
             event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onRenderOverlayPost(RenderGuiOverlayEvent.Post event) {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null) return;
+
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.FOOD_LEVEL.id())) {
+            if (DiseaseEffects.hasStomachCramps(player)) {
+                RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+            }
+            if (DiseaseEffects.hasTachypnea(player)) {
+                event.getGuiGraphics().pose().popPose();
+            }
+            return;
+        }
+
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.AIR_LEVEL.id())
+                && DiseaseEffects.hasTachypnea(player)) {
+            TachypneaLungOverlay.render(event.getGuiGraphics(),
+                    event.getWindow().getGuiScaledWidth(), event.getWindow().getGuiScaledHeight());
         }
     }
 

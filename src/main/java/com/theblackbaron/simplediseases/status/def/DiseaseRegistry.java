@@ -242,8 +242,7 @@ public final class DiseaseRegistry {
                 ),
                 List.of(),
                 List.of(
-                    new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.BREATHLESS,
-                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.ADVANCED, 200),
+                    new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.HYPOTENSION, SymptomBand.ADVANCED, 200),
                     new SymptomEntry(DiseaseEffects.TACHYCARDIA, SymptomAction.NONE,
                             () -> DiseaseSounds.HEARTBEAT.get(), SymptomBand.ADVANCED),
                     new SymptomEntry(DiseaseEffects.CONFUSION, SymptomAction.NONE, SymptomBand.ADVANCED)
@@ -262,8 +261,7 @@ public final class DiseaseRegistry {
             SEPSIS_STAPH, 4, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
             symptomConfig(
                 List.of(
-                    new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.BREATHLESS,
-                            () -> DiseaseSounds.SHORTNESS_OF_BREATH.get(), SymptomBand.COMMON, 200)
+                    new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.HYPOTENSION, SymptomBand.COMMON, 200)
                 ),
                 List.of(
                     new SymptomEntry(DiseaseEffects.LOCALIZED_REDNESS, SymptomAction.NONE,

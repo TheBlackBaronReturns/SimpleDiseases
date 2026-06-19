@@ -17,14 +17,19 @@ import org.jetbrains.annotations.Nullable;
 
 public record IconTextTooltipRenderer(IconTextTooltipComponent tooltip) implements ClientTooltipComponent {
 
-    public static final ResourceLocation FEVER_ICON =
-            ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, "textures/mob_effect/fever.png");
+    private static ResourceLocation mobEffectTexture(String path) {
+        return ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, "textures/mob_effect/" + path + ".png");
+    }
 
     private static final int ICON_SIZE = 9;
     private static final int TEXT_OFFSET = 12;
 
     public static boolean isFeverLine(Component component) {
         return keyStartsWith(component, "simplediseases.fever.");
+    }
+
+    public static boolean isShockLine(Component component) {
+        return keyEquals(component, "simplediseases.shock");
     }
 
     public static boolean isPainLine(Component component) {
@@ -46,9 +51,23 @@ public record IconTextTooltipRenderer(IconTextTooltipComponent tooltip) implemen
     }
 
     @Nullable
+    private static ResourceLocation feverOrShockTexture(Component component) {
+        if (!(component.getContents() instanceof TranslatableContents tc)) return null;
+        return switch (tc.getKey()) {
+            case "simplediseases.fever.light" -> mobEffectTexture("fever_light");
+            case "simplediseases.fever.mild" -> mobEffectTexture("fever_mild");
+            case "simplediseases.fever.high" -> mobEffectTexture("fever_high");
+            case "simplediseases.fever.severe" -> mobEffectTexture("fever_severe");
+            case "simplediseases.shock" -> mobEffectTexture("septic_shock");
+            default -> null;
+        };
+    }
+
+    @Nullable
     public static IconTextTooltipComponent fromLine(Component component) {
-        if (isFeverLine(component)) {
-            return new IconTextTooltipComponent(component, FEVER_ICON, null);
+        ResourceLocation feverOrShock = feverOrShockTexture(component);
+        if (feverOrShock != null) {
+            return new IconTextTooltipComponent(component, feverOrShock, null);
         }
         if (isPainLine(component)) {
             return new IconTextTooltipComponent(component, null, DiseaseEffects.PAIN.get());
@@ -64,6 +83,11 @@ public record IconTextTooltipRenderer(IconTextTooltipComponent tooltip) implemen
     private static boolean keyStartsWith(Component component, String prefix) {
         if (!(component.getContents() instanceof TranslatableContents tc)) return false;
         return tc.getKey().startsWith(prefix);
+    }
+
+    private static boolean keyEquals(Component component, String key) {
+        if (!(component.getContents() instanceof TranslatableContents tc)) return false;
+        return tc.getKey().equals(key);
     }
 
     @Override

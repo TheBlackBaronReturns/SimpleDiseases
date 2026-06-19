@@ -38,6 +38,10 @@ public record SymptomEntry(
         this(effect, action, Optional.empty(), band, SymptomTiming.EPISODIC, Optional.empty(), 0, false);
     }
 
+    public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, SymptomBand band, int durationTicks) {
+        this(effect, action, Optional.empty(), band, SymptomTiming.EPISODIC, Optional.of(durationTicks), 0, false);
+    }
+
     public SymptomEntry(Supplier<MobEffect> effect, SymptomAction action, Supplier<SoundEvent> sound, SymptomBand band) {
         this(effect, action, Optional.of(sound), band, SymptomTiming.EPISODIC, Optional.empty(), 0, false);
     }

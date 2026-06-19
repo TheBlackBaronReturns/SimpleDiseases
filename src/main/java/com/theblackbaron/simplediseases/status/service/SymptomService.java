@@ -300,6 +300,7 @@ public final class SymptomService {
                     new MobEffectInstance(MobEffects.CONFUSION, duration, 0, false, false, false));
             case BREATHLESS -> player.addEffect(
                     new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 3, false, false, false));
+            case HYPOTENSION -> { /* pulses via HypotensionEffect.applyEffectTick */ }
             case DAMAGE -> {
                 if (entry.effect().get() == DiseaseEffects.BLOODY_COUGHING.get()) {
                     BloodyCoughingEffect.beginDamageWindow(player, gameTime + duration);
@@ -316,6 +317,10 @@ public final class SymptomService {
                 if (player.hasEffect(MobEffects.CONFUSION)) player.removeEffect(MobEffects.CONFUSION);
             }
             case BREATHLESS -> {
+                if (player.hasEffect(MobEffects.MOVEMENT_SLOWDOWN)) player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+            }
+            case HYPOTENSION -> {
+                if (player.hasEffect(MobEffects.BLINDNESS)) player.removeEffect(MobEffects.BLINDNESS);
                 if (player.hasEffect(MobEffects.MOVEMENT_SLOWDOWN)) player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             }
             default -> {}

@@ -93,6 +93,12 @@ public class DiseaseMobEffect extends MobEffect {
         return sharedIconId;
     }
 
+    /**
+     * Per-level malaise jump debuff (effective amount = this × (amplifier + 1)). Tuned so amp 3
+     * still clears a 1-block step (vanilla jump ~1.25 blocks; factor must stay above ~0.89).
+     */
+    public static final double MALAISE_JUMP_DEBUFF = -0.025;
+
     /** Maps disease fever/shock tier to malaise MobEffect amplifier (display levels 1–4 → amp 0–3). */
     public static int malaiseAmplifierFrom(DiseaseMobEffect effect) {
         if (effect.getShockOffset() > 0) return 3;

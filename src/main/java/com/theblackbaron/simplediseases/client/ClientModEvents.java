@@ -20,6 +20,8 @@ public class ClientModEvents {
         event.registerSpriteSet(DiseaseParticles.NOROVIRUS.get(), NorovirusParticle.Provider::new);
         event.registerSpriteSet(DiseaseParticles.BLEEDING.get(), BleedingParticle.Provider::new);
         event.registerSpriteSet(DiseaseParticles.VOMIT.get(), VomitParticle.Provider::new);
+        event.registerSpriteSet(DiseaseParticles.BLOODY_COUGH.get(), VomitParticle.Provider::new);
+        event.registerSpriteSet(DiseaseParticles.SPUTUM.get(), VomitParticle.Provider::new);
     }
 
     @SubscribeEvent

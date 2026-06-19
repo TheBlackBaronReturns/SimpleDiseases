@@ -18,6 +18,8 @@ public enum SymptomAction {
     NAUSEA,
     /** Apply a brief, drastic Slowness (shortness of breath) — the movement-speed crash. */
     BREATHLESS,
+    /** Repeating 10 s blindness + Slowness IV every 30 s — handled by {@link HypotensionEffect}. */
+    HYPOTENSION,
     /** Repeated magic damage during a Bloody Coughing episode via BloodyCoughingEffect. */
     DAMAGE;
 
