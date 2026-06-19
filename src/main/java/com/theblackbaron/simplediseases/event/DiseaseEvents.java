@@ -5,6 +5,7 @@ import com.theblackbaron.simplediseases.compat.ColdSweatCompat;
 import com.theblackbaron.simplediseases.compat.SereneSeasonsCompat;
 import com.theblackbaron.simplediseases.particle.DiseaseParticleEmitter;
 import com.theblackbaron.simplediseases.particle.DiseaseParticles;
+import com.theblackbaron.simplediseases.network.NetworkHandler;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.category.ComplicationCategory;
 import com.theblackbaron.simplediseases.status.category.DiseaseContext;
@@ -89,6 +90,7 @@ public class DiseaseEvents {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         CompoundTag root = player.getPersistentData().getCompound(SimpleDiseases.MOD_ID);
         states.put(player.getUUID(), PlayerDiseaseState.loadFromNbt(root));
+        NetworkHandler.sendDiseaseStateSync(player, root);
     }
 
     @SubscribeEvent
@@ -675,5 +677,6 @@ public class DiseaseEvents {
         CompoundTag root = new CompoundTag();
         state.saveToNbt(root);
         player.getPersistentData().put(SimpleDiseases.MOD_ID, root);
+        NetworkHandler.sendDiseaseStateSync(player, root);
     }
 }

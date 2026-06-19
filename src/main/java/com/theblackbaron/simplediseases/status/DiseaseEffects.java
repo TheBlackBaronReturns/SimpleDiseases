@@ -1,7 +1,17 @@
 package com.theblackbaron.simplediseases.status;
 
 import com.theblackbaron.simplediseases.SimpleDiseases;
+import com.theblackbaron.simplediseases.status.component.Components;
+import com.theblackbaron.simplediseases.status.component.DiseaseInstance;
+import com.theblackbaron.simplediseases.status.component.ProgressComponent;
+import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
+import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
+import com.theblackbaron.simplediseases.status.def.DiseaseDef;
+import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
+import com.theblackbaron.simplediseases.status.def.SymptomConfig;
+import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
+import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
@@ -309,6 +319,33 @@ public class DiseaseEffects {
             }
         }
         return effect == winner;
+    }
+
+    /** True when the tooltip for {@code diseaseId} should show the persistent pain row. */
+    public static boolean shouldShowPainTooltip(ResourceLocation diseaseId, PlayerDiseaseState state) {
+        int maxAmp = -1;
+        ResourceLocation winner = null;
+        for (DiseaseInstance inst : state.instances()) {
+            DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
+            if (def == null) continue;
+            ProgressComponent prog = inst.get(Components.PROGRESS);
+            if (prog == null || !prog.inRecovery) continue;
+            SymptomConfig symptoms = symptomsOf(def);
+            if (symptoms == null || symptoms.persistentEffects().painAmplifier().isEmpty()) continue;
+            int amp = symptoms.persistentEffects().painAmplifier().getAsInt();
+            if (amp > maxAmp) {
+                maxAmp = amp;
+                winner = inst.diseaseId();
+            }
+        }
+        return diseaseId.equals(winner);
+    }
+
+    private static SymptomConfig symptomsOf(DiseaseDef def) {
+        if (def instanceof ViralDiseaseDef v) return v.symptoms();
+        if (def instanceof BacterialDiseaseDef b) return b.symptoms();
+        if (def instanceof ComplicationDiseaseDef c) return c.symptoms();
+        return null;
     }
 
     private static boolean hasModerateOrWorsePneumonia(LivingEntity e) {
