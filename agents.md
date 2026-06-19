@@ -31,7 +31,7 @@ com.theblackbaron.simplediseases
 ├── command/SdCommands.java       — /sd* debug and admin commands
 ├── compat/                       — Cold Sweat + Serene Seasons (never call mods elsewhere)
 ├── event/                        — DiseaseEvents, CureEvents, SymptomEvents
-├── mixin/                        — JEED fever tooltips, shivering, frostbite suppress, shared disease icons
+├── mixin/                        — JEED tooltips, HUD shake/tint, tachypnea air, sprint hunger, shared icons
 ├── network/                      — BleedingSplatterPacket + NetworkHandler
 ├── particle/                     — DiseaseParticles registry + DiseaseParticleEmitter
 ├── sound/DiseaseSounds.java
@@ -39,6 +39,18 @@ com.theblackbaron.simplediseases
 ```
 
 **Wiring (`SimpleDiseases` constructor):** `DiseaseAttributes` → `DiseaseEffects` → `DiseaseParticles` / `DiseaseSounds` → `DiseaseRegistry.bootstrap()` → Forge event handlers.
+
+### Mixins (`simplediseases.mixins.json`)
+
+| Mixin | Side | Role |
+|---|---|---|
+| `PlayerMixin` | common | Double sprint food exhaustion during tachycardia |
+| `LivingEntityMixin` | common | Tachypnea air drain / land recovery / suffocation |
+| `GuiMixin` | client | Tachycardia low-health heart shake |
+| `LivingEntityRendererMixin` | client | Fever/septic body shiver |
+| `MobEffectTextureManagerMixin` | client | Shared per-disease HUD icons |
+| `EffectRendererMixin` | client | JEED tooltip rows (`require = 0`) |
+| `ScreenExtensionsHandlerMixin` | client | Icon rows in JEED tooltips |
 
 ---
 
@@ -147,7 +159,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 |---|---|
 | Hallmarks | Localized Redness (*static*) |
 | Common | — |
-| Severe (ADV) | Hypotension (`BREATHLESS`, 200 ticks); Tachycardia; Confusion |
+| Severe (ADV) | Hypotension (`HYPOTENSION`); Tachycardia; Confusion |
 | Persistent | Malaise + Pain II |
 | Episode pacing | 60–180 s · 30–90 s |
 
@@ -155,7 +167,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 
 | Layer | Symptoms |
 |---|---|
-| Hallmarks | Hypotension (`BREATHLESS`, 200 ticks) |
+| Hallmarks | Hypotension (`HYPOTENSION`) |
 | Common | Localized Redness (*static*, *inherit-only*); Confusion; Tachycardia; Tachypnea |
 | Severe (ADV) | Shortness of Breath (`BREATHLESS`, 200 ticks, *inherit-only*); Mottled Skin (*static*) |
 | Exclusive pairs | Localized Redness ↔ Mottled Skin (bidirectional; adding one clears the other from pool) |
@@ -200,7 +212,7 @@ Rolled once at first latch. Honey reduces tier: 35% base, ×0.5 per prior succes
 | High | +35 | Red |
 | Severe | +50 | Dark red |
 
-- **Tooltip:** `EffectRendererMixin` injects colored fever label under JEED `"potion.whenDrank"` (`require = 0`).
+- **Tooltip:** `EffectRendererMixin` injects colored fever/shock/pain/symptom rows under JEED `"potion.whenDrank"` (`require = 0`). Fever and septic shock use tier-specific icons (`fever_light` … `fever_severe`, `septic_shock`) via `IconTextTooltipRenderer`.
 - **Cold Sweat WORLD modifiers:** `FeverWorldTempModifier` (+) and `SepticShockTempModifier` (−) synced each tick via `ColdSweatCompat.syncDiseaseWorldModifiers`.
 - **Malaise scaling:** `PersistentEffectService` applies infinite malaise while latched; amp = max `DiseaseMobEffect.malaiseAmplifierFrom()` across latched disease variants (fever/shock → amp 0–3).
 
@@ -251,16 +263,33 @@ Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **c
 | `DAMAGE` | Bloody Coughing: magic 1♥/s for `durationTicks` via `BloodyCoughingEffect` NBT window |
 | `DRAIN_FOOD` | −3 food, saturation → 0 (vomiting/diarrhea) |
 | `NAUSEA` | Vanilla Confusion for duration (Headache) |
-| `BREATHLESS` | Slowness IV (~60% slow) for duration |
+| `BREATHLESS` | Slowness IV (~60% slow) for `durationTicks` (200 ticks = 10 s for Shortness of Breath) |
+| `HYPOTENSION` | No sound on fire; `HypotensionEffect` pulses hidden Blindness + Slowness IV every **30 s** for **10 s** while the episode marker is active |
 
-**Treatment (interim):** Broth/honey suppress episodic firing only (`SYMPTOMS_MANAGED` / `TREATMENT_APPLIED`); pool bits, static markers, and persistent effects remain.
+**Treatment (interim):** Broth/honey suppress episodic firing only (`SYMPTOMS_MANAGED` / `TREATMENT_APPLIED`); pool bits, static markers, and persistent effects remain. Clearing a hypotension episode removes active blindness/slowness side effects.
+
+### Symptom Gameplay (while episode marker active)
+
+Effects keyed on symptom `MobEffect` presence — not tied to a specific disease.
+
+| Symptom | Server | Client |
+|---|---|---|
+| **Shortness of Breath** | Hidden Slowness IV for 10 s on episode fire (`BREATHLESS`) | — |
+| **Hypotension** | `HypotensionEffect.applyEffectTick`: Blindness + Slowness IV every 30 s (10 s each); silent | — |
+| **Tachycardia** | `PlayerMixin`: doubles food exhaustion while sprinting | `GuiMixin.renderHeart`: per-heart Y jitter (low-health shake) |
+| **Tachypnea** | `LivingEntityMixin` after vanilla air tick: +1 underwater drain (2× total); on land sprint −6/tick (net drain after regen); +4/tick recovery when not sprinting; drowning damage at air ≤ 0 on land | Cancel vanilla `AIR_LEVEL`; render lung bar (`TachypneaLungOverlay`); shift food bar up 10 px |
+| **Stomach Cramps** | Blocks natural hunger regen (`SymptomEvents.onHeal`) | Red hunger-bar tint (`ClientForgeEvents` food overlay) |
+| **Bloody Coughing** | `DAMAGE`: 1♥ magic/s for 100 ticks (`BloodyCoughingEffect` NBT window) | 4 staggered blood splats per episode (`bloody_cough` particle, `VomitParticle` physics) |
+| **Productive Coughing** | Marker + sound only | 4 staggered sputum splats per episode (`sputum` particle) |
+
+Cough bursts: offsets `{0, 8, 17, 26}` ticks, 1–2 particles per burst, chest height — scheduled in `DiseaseEvents.tickCoughParticles` (same episode-onset detection as vomit).
 
 ### Symptom-Driven Interactions (`SymptomEvents`)
 
 | Trigger | Behavior |
 |---|---|
 | Sore Throat + eat | 0.5 HP magic damage per hunger point restored (on finish); actionbar message |
-| Stomach Cramps + heal ≤ 1 HP (no Regen) | Cancel heal |
+| Stomach Cramps + heal ≤ 1 HP (no Regen) | Cancel heal; red hunger-bar tint while active |
 | Pain amp ≥ 2 + sleep | Block sleep |
 | Active norovirus tier | Cap saturation at `disease_max_saturation` |
 | Malaise on player | Scale jump via `disease_jump_factor` on `LivingJumpEvent` |
@@ -324,7 +353,18 @@ Per-tier disease `MobEffect`s still register separately (gameplay modifiers, fev
 
 - **Textures:** separate `vomit_0`–`vomit_6` (green-tinted splats)
 - **Client:** `VomitParticle` — same physics as bleeding, larger scale (`quadSize 1.5`), pre-green PNGs with brightness fade
-- **Server:** ~4 s burst when vomiting episode starts (`DiseaseEvents.tickVomitParticles`); spawn at chest height (`Y + 0.35 × height`); 2–4 particles per pulse
+- **Server:** ~2 s continuous burst when vomiting episode starts (`DiseaseEvents.tickVomitParticles`); spawn at chest height (`Y + 0.35 × height`); 2–4 particles per pulse
+
+### Cough splatter particles (bloody / productive)
+
+- **Types:** `bloody_cough` (reuses `blood_0`–`blood_6` textures) and `sputum` (`sputum_0`–`sputum_6`, light-green splats)
+- **Client:** both use `VomitParticle.Provider` (mouth-eject → ground splat)
+- **Server:** `DiseaseParticleEmitter.emitCoughSplatter` — 1–2 particles per burst; `DiseaseEvents.tickCoughParticles` fires 4 staggered bursts per episode
+
+### Tachypnea lung HUD
+
+- **Asset:** `textures/gui/lungs.png` (same icon layout as vanilla bubble row)
+- **Client:** `TachypneaLungOverlay` drawn on `AIR_LEVEL` overlay Post when tachypnea active (including on land); vanilla bubble overlay cancelled; food row shifted up 10 px
 
 Disease ambient particles (cold/flu/rsv/norovirus) still use `DiseaseParticleEmitter.tick` on latched viral recovery.
 
@@ -447,4 +487,5 @@ Contagion villager exposure is in-memory only.
 - Symptom episodes → `SymptomService` only; add to `SymptomConfig`, not manual tick applies.
 - Compat → `ColdSweatCompat` / `SereneSeasonsCompat` exclusively.
 - Recovery suppression → build in `DiseaseEvents`, consume via `DiseaseContext.suppressRecovery`.
-- Bleeding/vomit visuals → server `sendParticles` + client particle classes; HUD splatter via network packet.
+- Bleeding/vomit/cough visuals → server `sendParticles` + client particle classes; HUD splatter via network packet; lung overlay via `ClientForgeEvents`.
+- Symptom side effects with continuous behavior → custom `MobEffect` subclass (`HypotensionEffect`, `BloodyCoughingEffect`) or mixins (`PlayerMixin`, `LivingEntityMixin`, `GuiMixin`).
