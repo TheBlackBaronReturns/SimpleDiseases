@@ -44,7 +44,7 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
-
+Change the fever system: currently players can exploit by staying in a cold biome wiyh a very light cold that never gets cured
 
 Septic should be a unique disease wherein inheritance only symptoms should serve as an additional fourth symptom representing the continuation of the source disease
 
