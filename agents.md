@@ -45,8 +45,8 @@ com.theblackbaron.simplediseases
 | Mixin | Side | Role |
 |---|---|---|
 | `PlayerMixin` | common | Double sprint food exhaustion during tachycardia |
-| `LivingEntityMixin` | common | Tachypnea air drain / land recovery / suffocation |
 | `GuiMixin` | client | Tachycardia low-health heart shake |
+| `ForgeGuiMixin` | client | Stomach cramps red food-bar tint |
 | `LivingEntityRendererMixin` | client | Fever/septic body shiver |
 | `MobEffectTextureManagerMixin` | client | Shared per-disease HUD icons |
 | `EffectRendererMixin` | client | JEED tooltip rows (`require = 0`) |
@@ -277,8 +277,8 @@ Effects keyed on symptom `MobEffect` presence — not tied to a specific disease
 | **Shortness of Breath** | Hidden Slowness IV for 10 s on episode fire (`BREATHLESS`) | — |
 | **Hypotension** | `HypotensionEffect.applyEffectTick`: Blindness + Slowness IV every 30 s (10 s each); silent | — |
 | **Tachycardia** | `PlayerMixin`: doubles food exhaustion while sprinting | `GuiMixin.renderHeart`: per-heart Y jitter (low-health shake) |
-| **Tachypnea** | `LivingEntityMixin` after vanilla air tick: +1 underwater drain (2× total); on land sprint −6/tick (net drain after regen); +4/tick recovery when not sprinting; drowning damage at air ≤ 0 on land | Cancel vanilla `AIR_LEVEL`; render lung bar (`TachypneaLungOverlay`); shift food bar up 10 px |
-| **Stomach Cramps** | Blocks natural hunger regen (`SymptomEvents.onHeal`) | Red hunger-bar tint (`ClientForgeEvents` food overlay) |
+| **Tachypnea** | `SymptomEvents.onLivingBreathe`: land sprint consumes 6/tick (Forge hook, no auto-refill); +4/tick refill when not sprinting; underwater +1 consume; vanilla drown at air ≤ −20 | Vanilla `AIR_LEVEL` bubbles; `TachypneaAirOverlay` at full air on land |
+| **Stomach Cramps** | Blocks natural hunger regen (`SymptomEvents.onHeal`) | Red hunger-bar tint (`ForgeGuiMixin.renderFood`) |
 | **Bloody Coughing** | `DAMAGE`: 1♥ magic/s for 100 ticks (`BloodyCoughingEffect` NBT window) | 4 staggered blood splats per episode (`bloody_cough` particle, `VomitParticle` physics) |
 | **Productive Coughing** | Marker + sound only | 4 staggered sputum splats per episode (`sputum` particle) |
 
@@ -361,10 +361,9 @@ Per-tier disease `MobEffect`s still register separately (gameplay modifiers, fev
 - **Client:** both use `VomitParticle.Provider` (mouth-eject → ground splat)
 - **Server:** `DiseaseParticleEmitter.emitCoughSplatter` — 1–2 particles per burst; `DiseaseEvents.tickCoughParticles` fires 4 staggered bursts per episode
 
-### Tachypnea lung HUD
+### Tachypnea air HUD
 
-- **Asset:** `textures/gui/lungs.png` (same icon layout as vanilla bubble row)
-- **Client:** `TachypneaLungOverlay` drawn on `AIR_LEVEL` overlay Post when tachypnea active (including on land); vanilla bubble overlay cancelled; food row shifted up 10 px
+- **Client:** vanilla `AIR_LEVEL` overlay when air is below max; `TachypneaAirOverlay` draws the same `icons.png` bubble row at full air on land (resource-pack compatible)
 
 Disease ambient particles (cold/flu/rsv/norovirus) still use `DiseaseParticleEmitter.tick` on latched viral recovery.
 
@@ -487,5 +486,5 @@ Contagion villager exposure is in-memory only.
 - Symptom episodes → `SymptomService` only; add to `SymptomConfig`, not manual tick applies.
 - Compat → `ColdSweatCompat` / `SereneSeasonsCompat` exclusively.
 - Recovery suppression → build in `DiseaseEvents`, consume via `DiseaseContext.suppressRecovery`.
-- Bleeding/vomit/cough visuals → server `sendParticles` + client particle classes; HUD splatter via network packet; lung overlay via `ClientForgeEvents`.
-- Symptom side effects with continuous behavior → custom `MobEffect` subclass (`HypotensionEffect`, `BloodyCoughingEffect`) or mixins (`PlayerMixin`, `LivingEntityMixin`, `GuiMixin`).
+- Bleeding/vomit/cough visuals → server `sendParticles` + client particle classes; HUD splatter via network packet.
+- Symptom side effects with continuous behavior → custom `MobEffect` subclass (`HypotensionEffect`, `BloodyCoughingEffect`) or mixins (`PlayerMixin`, `GuiMixin`).

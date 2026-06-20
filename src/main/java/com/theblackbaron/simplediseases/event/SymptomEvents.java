@@ -4,6 +4,7 @@ import com.theblackbaron.simplediseases.status.DiseaseAttributes;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
@@ -13,6 +14,7 @@ import net.minecraft.world.food.FoodData;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingBreatheEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingHealEvent;
@@ -69,6 +71,30 @@ public class SymptomEvents {
         if (event.getAmount() <= 1.0F && !entity.hasEffect(MobEffects.REGENERATION)) {
             event.setCanceled(true);
         }
+    }
+
+    /**
+     * Tachypnea on land: sprint drains air through Forge's breathe hook (drowning at -20 like vanilla).
+     * Suppresses automatic land air refill so sprint drain is not undone every tick.
+     */
+    @SubscribeEvent
+    public void onLivingBreathe(LivingBreatheEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!DiseaseEffects.hasTachypnea(player)) return;
+
+        if (player.isEyeInFluid(FluidTags.WATER)) {
+            event.setConsumeAirAmount(event.getConsumeAirAmount() + 1);
+            return;
+        }
+
+        if (player.isSprinting()) {
+            event.setCanBreathe(false);
+            event.setConsumeAirAmount(6);
+            return;
+        }
+
+        event.setCanRefillAir(true);
+        event.setRefillAirAmount(4);
     }
 
     /**

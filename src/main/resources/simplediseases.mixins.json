@@ -5,8 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "simplediseases.refmap.json",
   "mixins": [
-    "PlayerMixin",
-    "LivingEntityMixin"
+    "PlayerMixin"
   ],
   "client": [
     "EffectRendererMixin",
@@ -14,7 +13,8 @@
     "LivingEntityRendererMixin",
     "MobEffectTextureManagerMixin",
     "TextureAtlasHolderInvoker",
-    "GuiMixin"
+    "GuiMixin",
+    "ForgeGuiMixin"
   ],
   "injectors": {
     "defaultRequire": 1

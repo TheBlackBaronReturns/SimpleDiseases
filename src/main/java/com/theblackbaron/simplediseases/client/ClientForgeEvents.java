@@ -1,7 +1,6 @@
 package com.theblackbaron.simplediseases.client;
 
 import com.mojang.datafixers.util.Either;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.theblackbaron.simplediseases.client.tooltip.IconTextTooltipComponent;
 import com.theblackbaron.simplediseases.client.tooltip.IconTextTooltipRenderer;
 import com.theblackbaron.simplediseases.SimpleDiseases;
@@ -10,9 +9,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
+import net.minecraft.tags.FluidTags;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderTooltipEvent;
+import net.minecraftforge.client.gui.overlay.ForgeGui;
 import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -39,22 +40,6 @@ public class ClientForgeEvents {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.FOOD_LEVEL.id())) {
-            if (DiseaseEffects.hasStomachCramps(player)) {
-                RenderSystem.setShaderColor(1.0F, 0.35F, 0.35F, 1.0F);
-            }
-            if (DiseaseEffects.hasTachypnea(player)) {
-                event.getGuiGraphics().pose().pushPose();
-                event.getGuiGraphics().pose().translate(0.0F, -TachypneaLungOverlay.foodRowShift(), 0.0F);
-            }
-        }
-
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.AIR_LEVEL.id())
-                && DiseaseEffects.hasTachypnea(player)) {
-            event.setCanceled(true);
-            return;
-        }
-
         if (!event.getOverlay().id().equals(VanillaGuiOverlay.FROSTBITE.id())) return;
         if (DiseaseEffects.hasShiveringDisease(player)) {
             event.setCanceled(true);
@@ -66,21 +51,20 @@ public class ClientForgeEvents {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.FOOD_LEVEL.id())) {
-            if (DiseaseEffects.hasStomachCramps(player)) {
-                RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-            }
-            if (DiseaseEffects.hasTachypnea(player)) {
-                event.getGuiGraphics().pose().popPose();
-            }
-            return;
-        }
+        if (!event.getOverlay().id().equals(VanillaGuiOverlay.AIR_LEVEL.id())) return;
+        if (!DiseaseEffects.hasTachypnea(player)) return;
+        if (player.isEyeInFluid(FluidTags.WATER)) return;
+        if (player.getAirSupply() < player.getMaxAirSupply()) return;
 
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.AIR_LEVEL.id())
-                && DiseaseEffects.hasTachypnea(player)) {
-            TachypneaLungOverlay.render(event.getGuiGraphics(),
-                    event.getWindow().getGuiScaledWidth(), event.getWindow().getGuiScaledHeight());
-        }
+        var gui = Minecraft.getInstance().gui;
+        if (!(gui instanceof ForgeGui forgeGui)) return;
+
+        TachypneaAirOverlay.renderFullAir(
+                event.getGuiGraphics(),
+                forgeGui,
+                event.getWindow().getGuiScaledWidth(),
+                event.getWindow().getGuiScaledHeight(),
+                player);
     }
 
     @SubscribeEvent
