@@ -69,6 +69,7 @@ public final class DiseaseRegistry {
                 List.of(
                     new SymptomEntry(DiseaseEffects.COUGH,    SymptomAction.NONE, () -> DiseaseSounds.COUGH.get()),
                     new SymptomEntry(DiseaseEffects.SNEEZING, SymptomAction.NONE, () -> DiseaseSounds.SNEEZE.get()),
+                    new SymptomEntry(DiseaseEffects.HEADACHE,    SymptomAction.NAUSEA, 200),
                     new SymptomEntry(DiseaseEffects.SORE_THROAT, SymptomAction.NONE)
                 ),
                 List.of(),

@@ -22,13 +22,14 @@ No test framework. Verify features in-client.
 
 ## Development Principles
 
-**After correctness, the highest priorities for every change are performance, multiplayer compatibility, and broad mod compatibility.** Treat these as hard constraints, not nice-to-haves.
+**After correctness, the highest priorities for every change are performance, multiplayer compatibility, broad mod compatibility, and code optimization.** Treat these as hard constraints, not nice-to-haves.
 
 | Principle | Expectation |
 |---|---|
 | **Performance** | Server-authoritative tick logic; precompute per-tick values once (e.g. recovery multipliers in `DiseaseEvents`); reuse collection caches; avoid per-player allocations on hot paths; prefer primitives and in-place mutation over new objects each tick. |
 | **Multiplayer** | Gameplay state lives on the server and syncs through vanilla channels (`MobEffectInstance`, NBT persistence) or minimal custom packets. World feedback uses `ServerLevel.sendParticles()` so nearby players see vomit, blood, cough, and ambient disease particles. Reserve `PacketDistributor.PLAYER` for **local HUD only** (e.g. `BleedingSplatterPacket`). Body shiver renders on all clients via synced effects + `LivingEntityRendererMixin`. |
 | **Mod compatibility** | Never call optional-mod classes outside `compat/` packages. Cold Sweat and Serene Seasons must have **offline fallbacks**. Optional client mixins use `require = 0` where appropriate (JEED). Detect mods at runtime (`ModList`, `ColdSweatCompat.LOADED`), never assume presence. |
+| **Code optimization** | Prefer **data-driven** definitions (`DiseaseRegistry.bootstrap()`, `SymptomConfig`, component bags) over scattered per-disease logic. **Centralize** shared behavior (`ColdSweatCompat`, `WorseningRoll`, `SymptomService`, `DiseaseContext`) instead of duplicating it across categories. **Remove redundancies** when consolidating. Keep modules **small, reusable, and composable** — one manager/service per concern, categories consume context rather than re-deriving state. |
 
 When a feature conflicts with these principles, redesign the feature — do not bolt on client-only state or hard dependencies.
 
@@ -115,7 +116,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Layer | Symptoms |
 |---|---|
 | Hallmarks | — |
-| Common | Coughing; Runny Nose; Sore Throat |
+| Common | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat |
 | Severe (ADV) | — |
 | Persistent | Malaise |
 | Episode pacing | 120–300 s interval · 30–60 s duration |
@@ -558,5 +559,5 @@ Contagion villager exposure is in-memory only.
 - Worsening rolls → `WorseningRoll.chance(worsenings)` for momentum stochastic tiers.
 - Accum fatigue → `AccumFatigueManager.tick()` after env-accum flag is known; never duplicate damp/wind detection.
 - Bleeding/vomit/cough visuals → server `sendParticles` (multiplayer-visible) + client particle classes; HUD splatter via player-only network packet.
-- Performance / multiplayer / mod compat → see **Development Principles**; do not regress them for convenience.
+- Performance / multiplayer / mod compat / code optimization → see **Development Principles**; do not regress them for convenience.
 - Symptom side effects with continuous behavior → custom `MobEffect` subclass (`HypotensionEffect`, `BloodyCoughingEffect`) or mixins (`PlayerMixin`, `GuiMixin`).

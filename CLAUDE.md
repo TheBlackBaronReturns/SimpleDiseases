@@ -15,11 +15,12 @@ There is no test framework. Verify features by running the client (`./gradlew ru
 
 ## Development Principles
 
-**After correctness, the highest priorities for every change are performance, multiplayer compatibility, and broad mod compatibility.** Treat these as hard constraints.
+**After correctness, the highest priorities for every change are performance, multiplayer compatibility, broad mod compatibility, and code optimization.** Treat these as hard constraints.
 
 - **Performance:** Server-authoritative ticks; precompute per-tick values once in `DiseaseEvents`; reuse caches (`suppressedEpisodeSourcesCache`, windchill cache); avoid per-player allocations on hot paths.
 - **Multiplayer:** Gameplay on server; world particles via `sendParticles` (visible to nearby players); `MobEffectInstance` sync for model/HUD state; custom packets only for local HUD (`BleedingSplatterPacket`).
 - **Mod compatibility:** Optional mods only through `compat/` with offline fallbacks; `require = 0` on optional mixins; runtime detection (`ColdSweatCompat.LOADED`, `ModList`).
+- **Code optimization:** Data-driven disease defs in `DiseaseRegistry`; centralize shared logic (`ColdSweatCompat`, `WorseningRoll`, `SymptomService`); remove redundancies; modular, reusable managers/services.
 
 See **agents.md → Development Principles** for the full table.
 
@@ -83,7 +84,7 @@ Quick index:
 
 | ID | Hallmarks | Common | Severe (ADV) | Persistent |
 |---|---|---|---|---|
-| `cold` | — | Cough, Sneezing, Sore Throat | — | Malaise |
+| `cold` | — | Cough, Sneezing, Headache, Sore Throat | — | Malaise |
 | `flu` | — | Cough, Sneezing, Headache, Sore Throat | Vomiting, SOB, Tachypnea, Tachycardia | Malaise |
 | `rsv` | Wheezing | Cough, Sneezing | SOB, Tachypnea | Malaise |
 | `norovirus` | — | Headache, Vomiting, Diarrhea, Stomach Cramps | — | Malaise |
