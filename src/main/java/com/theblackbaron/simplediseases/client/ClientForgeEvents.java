@@ -68,6 +68,13 @@ public class ClientForgeEvents {
     }
 
     @SubscribeEvent
+    public static void onRenderDebugOverlay(RenderGuiOverlayEvent.Post event) {
+        if (!ClientDebugOverlay.isActive()) return;
+        if (!event.getOverlay().id().equals(VanillaGuiOverlay.CROSSHAIR.id())) return;
+        ClientDebugOverlay.render(event.getGuiGraphics(), Minecraft.getInstance().font);
+    }
+
+    @SubscribeEvent
     public static void injectIconTooltipRows(RenderTooltipEvent.GatherComponents event) {
         List<Either<FormattedText, net.minecraft.world.inventory.tooltip.TooltipComponent>> elements =
                 event.getTooltipElements();

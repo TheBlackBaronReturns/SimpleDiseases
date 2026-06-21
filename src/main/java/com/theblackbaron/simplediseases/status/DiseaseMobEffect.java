@@ -23,6 +23,13 @@ public class DiseaseMobEffect extends MobEffect {
     public static final double FEVER_HIGH   = 0.15;
     public static final double FEVER_SEVERE = 0.20;
 
+    /** MULTIPLY_TOTAL max-health penalty while Very High Fever is active (40°C). */
+    public static final double FEVER_HIGH_MAX_HEALTH_FRAC   = 0.05;
+    /** MULTIPLY_TOTAL max-health penalty while Hyperpyrexia is active (≥41°C). */
+    public static final double FEVER_SEVERE_MAX_HEALTH_FRAC  = 0.15;
+    /** MULTIPLY_TOTAL max-health penalty while septic shock is active. */
+    public static final double SEPTIC_SHOCK_MAX_HEALTH_FRAC  = 0.25;
+
     /** MC WORLD-scale ambient penalty applied during septic shock (magnitude; applied as a negative WORLD offset). */
     public static final double SEPTIC_SHOCK_WORLD_OFFSET = 0.75;
     /** WORLD (MC scale) above default habitable max before shock cold-perception begins easing. */
@@ -81,6 +88,19 @@ public class DiseaseMobEffect extends MobEffect {
 
     public double getShockOffset() {
         return shockOffset;
+    }
+
+    /** MULTIPLY_TOTAL max-health penalty fraction for raw tier offsets; shock beats fever. */
+    public static double maxHealthPenaltyFracFor(double feverOffset, double shockOffset) {
+        if (shockOffset > 0.0) return SEPTIC_SHOCK_MAX_HEALTH_FRAC;
+        if (feverOffset >= FEVER_SEVERE) return FEVER_SEVERE_MAX_HEALTH_FRAC;
+        if (feverOffset >= FEVER_HIGH) return FEVER_HIGH_MAX_HEALTH_FRAC;
+        return 0.0;
+    }
+
+    /** MULTIPLY_TOTAL max-health penalty fraction for this tier; shock beats fever. */
+    public double maxHealthPenaltyFrac() {
+        return maxHealthPenaltyFracFor(feverOffset, shockOffset);
     }
 
     /** Sets the shared atlas sprite id for all tiers of this disease path; chainable. */

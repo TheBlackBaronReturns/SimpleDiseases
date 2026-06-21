@@ -22,7 +22,7 @@ public abstract class ForgeGuiMixin {
     }
 
     @Inject(method = "renderFood", at = @At("RETURN"), remap = false)
-    private void simplediseases$resetFoodTint(GuiGraphics guiGraphics, CallbackInfo ci) {
+    private void simplediseases$resetFoodTint(int width, int height, GuiGraphics guiGraphics, CallbackInfo ci) {
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 }

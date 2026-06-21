@@ -5,6 +5,7 @@ import com.theblackbaron.simplediseases.compat.ColdSweatCompat;
 import com.theblackbaron.simplediseases.compat.SereneSeasonsCompat;
 import com.theblackbaron.simplediseases.particle.DiseaseParticleEmitter;
 import com.theblackbaron.simplediseases.particle.DiseaseParticles;
+import com.theblackbaron.simplediseases.network.DebugOverlayPacket;
 import com.theblackbaron.simplediseases.network.NetworkHandler;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.category.ComplicationCategory;
@@ -54,8 +55,10 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -168,6 +171,7 @@ public class DiseaseEvents {
 
         wetnessManager.tick(player, state);
         injuryManager.tick(player, state);
+        enforceMaxHealthCap(player);
         tickVomitParticles(player, gameTime);
         tickCoughParticles(player, gameTime);
         boolean isDamp = player.hasEffect(DiseaseEffects.DAMP.get());
@@ -182,7 +186,7 @@ public class DiseaseEvents {
         if ((inReservoir || inLingering) && !state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)
                 && !hasViralComplication) {
             if (active == null || active.equals(DiseaseRegistry.NOROVIRUS)
-                    || (!state.inRecovery(active) && state.progress(active) < NULLIFY_THRESHOLD)) {
+                    || canViralTakeHold(state, active, DiseaseRegistry.NOROVIRUS)) {
                 if (active != null && !active.equals(DiseaseRegistry.NOROVIRUS)) state.clearProgress(active);
                 double base = inReservoir ? WaterborneManager.exposureRate(player) : 0.0;
                 if (inLingering) base = Math.max(base, WaterborneManager.submergedRate());
@@ -197,7 +201,7 @@ public class DiseaseEvents {
         if (enteredInfected && state.getPendingIncubation() <= 0.0 && !noroLatched && !hasViralComplication
                 && !state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)) {
             boolean noroCanTakeHold = active == null || active.equals(DiseaseRegistry.NOROVIRUS)
-                    || (!state.inRecovery(active) && state.progress(active) < NULLIFY_THRESHOLD);
+                    || canViralTakeHold(state, active, DiseaseRegistry.NOROVIRUS);
             if (noroCanTakeHold) {
                 ViralDiseaseDef noroDef = (ViralDiseaseDef) DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS);
                 state.setPendingIncubation(noroDef.rollIncubation(player.getRandom(), ImmuneManager.isImmunodeficient(player)),
@@ -286,11 +290,22 @@ public class DiseaseEvents {
 
         UUID pid = player.getUUID();
         if (gameTime % 20 == 0) {
-            if (debugViralPlayers.contains(pid)) {
-                showViralDebug(player, state, isDamp, viralEnvAccumulatedThisTick, viralRecoveryMult);
-            }
-            if (debugBacterialPlayers.contains(pid)) {
-                showBacterialDebug(player, state, bacterialRecoveryMult);
+            boolean viralDbg = debugViralPlayers.contains(pid);
+            boolean bacterialDbg = debugBacterialPlayers.contains(pid);
+            if (viralDbg || bacterialDbg) {
+                int mask = 0;
+                List<String> viralLines = List.of();
+                List<String> bacterialLines = List.of();
+                if (viralDbg) {
+                    mask |= DebugOverlayPacket.UPDATE_VIRAL;
+                    viralLines = buildViralDebugLines(player, state, isDamp, viralEnvAccumulatedThisTick,
+                            viralRecoveryMult);
+                }
+                if (bacterialDbg) {
+                    mask |= DebugOverlayPacket.UPDATE_BACTERIAL;
+                    bacterialLines = buildBacterialDebugLines(player, state, bacterialRecoveryMult);
+                }
+                NetworkHandler.sendDebugOverlay(player, mask, viralLines, bacterialLines);
             }
         }
     }
@@ -441,6 +456,12 @@ public class DiseaseEvents {
         if (amount <= 0.0) return active;
         long gameTime = player.level().getGameTime();
         if (active != null) {
+            if (!active.equals(DiseaseRegistry.FLU) && !state.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)
+                    && !state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)
+                    && canViralTakeHold(state, active, DiseaseRegistry.FLU)
+                    && tryFluLockIn(player, state, amount, active, viralEnvFlag)) {
+                return DiseaseRegistry.FLU;
+            }
             state.addProgress(active, amount);
             viralEnvFlag[0] = true;
             return active;
@@ -470,6 +491,38 @@ public class DiseaseEvents {
             return defaultDef.id();
         }
         return null;
+    }
+
+    /** True when {@code targetId} may replace {@code active} (sub-threshold, unlatched rival). */
+    private static boolean canViralTakeHold(PlayerDiseaseState state, ResourceLocation active, ResourceLocation targetId) {
+        if (active == null || active.equals(targetId)) return true;
+        return !state.inRecovery(active) && state.progress(active) < NULLIFY_THRESHOLD;
+    }
+
+    /** Outbreak flu roll during damp/wind: clears a switchable rival and accumulates flu. */
+    private boolean tryFluLockIn(ServerPlayer player, PlayerDiseaseState state, double amount,
+                                 ResourceLocation active, boolean[] viralEnvFlag) {
+        var level = player.level();
+        if (!fluSeasonManager.isOutbreakActive(level)) return false;
+        ViralDiseaseDef fluDef = (ViralDiseaseDef) DiseaseRegistry.get(DiseaseRegistry.FLU);
+        if (fluDef == null) return false;
+        boolean winter = SereneSeasonsCompat.isWinter(level);
+        boolean fluWindowOpen = fluSeasonManager.isFluWindowOpen(level);
+        double chance = fluDef.acquisition().chance(winter, fluWindowOpen, true);
+        if (chance <= 0.0 || player.getRandom().nextFloat() >= chance) return false;
+        state.clearProgress(active);
+        state.addProgress(DiseaseRegistry.FLU, amount);
+        viralEnvFlag[0] = true;
+        return true;
+    }
+
+    private static void enforceMaxHealthCap(ServerPlayer player) {
+        if (!DiseaseEffects.hasMaxHealthPenalty(player)) return;
+        float max = player.getMaxHealth();
+        float health = player.getHealth();
+        if (health > max) {
+            player.hurt(player.damageSources().magic(), health - max);
+        }
     }
 
     private void emitReservoirParticles(ServerPlayer player) {
@@ -519,8 +572,8 @@ public class DiseaseEvents {
     // VIRAL DEBUG OVERLAY (/sddebugviral)
     // =========================================================================
 
-    private void showViralDebug(ServerPlayer player, PlayerDiseaseState state, boolean isDamp,
-                                boolean viralEnvAccum, double viralRecoveryMult) {
+    private List<String> buildViralDebugLines(ServerPlayer player, PlayerDiseaseState state, boolean isDamp,
+                                              boolean viralEnvAccum, double viralRecoveryMult) {
         long gameTime = player.level().getGameTime();
         double worldTemp = ColdSweatCompat.getWorldTemp(player);
         MobEffectInstance dampEffect = player.getEffect(DiseaseEffects.DAMP.get());
@@ -540,8 +593,7 @@ public class DiseaseEvents {
             }
         }
 
-        // Viral complications (GROUP_VIRAL only)
-        String complicationStr = "";
+        StringBuilder complicationStr = new StringBuilder();
         for (DiseaseDef def : DiseaseRegistry.complications()) {
             if (!DiseaseRegistry.GROUP_VIRAL.equals(def.exclusionGroup())) continue;
             ResourceLocation id = def.id();
@@ -550,9 +602,9 @@ public class DiseaseEvents {
             String srcTag = src != null ? "(" + src.getPath() + ")" : "";
             String name = id.getPath();
             if (state.inRecovery(id)) {
-                complicationStr += String.format(" §c%s%s§r§7:§e%.3f§r", name.toUpperCase(Locale.ROOT), srcTag, prog);
+                complicationStr.append(String.format(" §c%s%s§r§7:§e%.3f§r", name.toUpperCase(Locale.ROOT), srcTag, prog));
             } else if (prog > 0) {
-                complicationStr += String.format(" §6%s%s§r§7:§e%.3f§r", name, srcTag, prog);
+                complicationStr.append(String.format(" §6%s%s§r§7:§e%.3f§r", name, srcTag, prog));
             }
         }
 
@@ -562,7 +614,6 @@ public class DiseaseEvents {
                 ? String.format(" §bWIND§r§7:§ex%.2f§r", WindchillManager.getMitigationFactor(player)
                     * ImmuneManager.getWindchillMultiplier(player)) : "";
 
-        // Episode info for the active viral disease or viral complication
         ResourceLocation activeId = null;
         for (DiseaseDef d : DiseaseRegistry.viral()) {
             if (state.inRecovery(d.id())) { activeId = d.id(); break; }
@@ -576,18 +627,17 @@ public class DiseaseEvents {
         }
         String epStr = buildEpStr(state, activeId, gameTime);
 
-        // Norovirus source
         boolean inReservoir = WaterborneManager.isInInfectedWater(player, state, gameTime);
         boolean inPuddle    = lingering.isInZone(player);
-        String noroSrcStr = "";
+        StringBuilder noroSrcStr = new StringBuilder();
         if (inReservoir || inPuddle) {
             String tag = inReservoir && inPuddle ? "reservoir+puddle" : inReservoir ? "reservoir" : "puddle";
-            noroSrcStr = " §2NORO-SRC§r§7:§a" + tag + "§r";
+            noroSrcStr.append(" §2NORO-SRC§r§7:§a").append(tag).append("§r");
         }
         if (state.getPendingIncubation() > 0.0) {
             ResourceLocation incubationId = state.getPendingIncubationId();
             String incubationTag = incubationId != null ? incubationId.getPath() : "?";
-            noroSrcStr += String.format(" §2INCUBATION(%s)§r§7:§a%.2f§r", incubationTag, state.getPendingIncubation());
+            noroSrcStr.append(String.format(" §2INCUBATION(%s)§r§7:§a%.2f§r", incubationTag, state.getPendingIncubation()));
         }
 
         String accumStr = viralEnvAccum ? " §cACCUM§r" : "";
@@ -596,29 +646,27 @@ public class DiseaseEvents {
         String recoveryStr = String.format(" §frecov:§e%.2f§r%s §fexposure:§e%ds§r §fdrain:§e%.6f§r",
                 viralRecoveryMult, accumStr, exposureSecs, drainRate);
 
-        String msg = String.format(
-            "§7[SDv]%s%s%s%s%s%s%s%s §fwet:§e%.2f §fdry:§e%.4f §fW:§e%.1f",
-            diseaseStr, complicationStr, dampStr, fluSeasonStr, windStr, epStr, noroSrcStr, recoveryStr,
-            state.getWetProgress(),
-            ColdSweatCompat.getDryRate(player), worldTemp
-        );
-        player.displayClientMessage(Component.literal(msg), true);
+        List<String> lines = new ArrayList<>(3);
+        lines.add(String.format("§7[SDv]%s%s", diseaseStr, complicationStr));
+        lines.add(String.format("§7%s%s%s%s", dampStr, fluSeasonStr, windStr, noroSrcStr));
+        lines.add(String.format("§7%s%s §fwet:§e%.2f §fdry:§e%.4f §fW:§e%.1f",
+                epStr, recoveryStr, state.getWetProgress(),
+                ColdSweatCompat.getDryRate(player), worldTemp));
+        return lines;
     }
 
     // =========================================================================
     // BACTERIAL DEBUG OVERLAY (/sddebugbacterial)
     // =========================================================================
 
-    private void showBacterialDebug(ServerPlayer player, PlayerDiseaseState state,
-                                    double bacterialRecoveryMult) {
+    private List<String> buildBacterialDebugLines(ServerPlayer player, PlayerDiseaseState state,
+                                                  double bacterialRecoveryMult) {
         long gameTime = player.level().getGameTime();
 
-        // Bacterial group immunity
         StringBuilder bacterialStr = new StringBuilder();
         long bGroupImm = state.groupImmunityUntil(DiseaseRegistry.GROUP_BACTERIAL) - gameTime;
         if (bGroupImm > 0) bacterialStr.append(String.format(" §abIMM§r§7:§e%ds§r", bGroupImm / 20));
 
-        // Wound-seeded bacterial diseases (cellulitis)
         for (DiseaseDef def : DiseaseRegistry.bacterial()) {
             ResourceLocation id = def.id();
             double prog = state.progress(id);
@@ -632,8 +680,7 @@ public class DiseaseEvents {
             }
         }
 
-        // Bacterial complications (GROUP_BACTERIAL in complicationList — sepsis)
-        String sepsisStr = "";
+        StringBuilder sepsisStr = new StringBuilder();
         for (DiseaseDef def : DiseaseRegistry.complications()) {
             if (!DiseaseRegistry.GROUP_BACTERIAL.equals(def.exclusionGroup())) continue;
             ResourceLocation id = def.id();
@@ -644,17 +691,15 @@ public class DiseaseEvents {
             if (state.inRecovery(id)) {
                 Severity sev = state.tierOf(id);
                 String sevStr = sev != null ? sev.name().substring(0, Math.min(4, sev.name().length())) : "?";
-                sepsisStr += String.format(" §c%s%s§r§7[§c%s§7]§r§7:§e%.3f§r", name.toUpperCase(Locale.ROOT), srcTag, sevStr, prog);
+                sepsisStr.append(String.format(" §c%s%s§r§7[§c%s§7]§r§7:§e%.3f§r", name.toUpperCase(Locale.ROOT), srcTag, sevStr, prog));
             } else if (prog > 0) {
-                sepsisStr += String.format(" §6%s%s§r§7:§e%.3f§r", name, srcTag, prog);
+                sepsisStr.append(String.format(" §6%s%s§r§7:§e%.3f§r", name, srcTag, prog));
             }
         }
 
-        // Flesh wound
         int lacSev = state.injury().fleshWoundSeverity();
         String lacStr = lacSev >= 0 ? String.format(" §eFW:%d§r", lacSev) : "";
 
-        // Episode info for the active bacterial/bacterial-complication disease
         ResourceLocation activeId = null;
         for (DiseaseDef d : DiseaseRegistry.bacterial()) {
             if (state.inRecovery(d.id())) { activeId = d.id(); break; }
@@ -684,8 +729,10 @@ public class DiseaseEvents {
         }
         String recoveryStr = String.format(" §frecov:§e%.2f§r §fdrain:§e%.6f§r", recovDisplay, drainRate);
 
-        String msg = String.format("§7[SDb]%s%s%s%s%s", bacterialStr, sepsisStr, lacStr, epStr, recoveryStr);
-        player.displayClientMessage(Component.literal(msg), true);
+        List<String> lines = new ArrayList<>(2);
+        lines.add(String.format("§7[SDb]%s%s%s", bacterialStr, sepsisStr, lacStr));
+        lines.add(String.format("§7%s%s", epStr, recoveryStr));
+        return lines;
     }
 
     private static boolean isCellulitisCapRecovery(PlayerDiseaseState state) {

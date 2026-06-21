@@ -15,9 +15,8 @@ public final class DiseaseAttributes {
             DeferredRegister.create(ForgeRegistries.ATTRIBUTES, SimpleDiseases.MOD_ID);
 
     /**
-     * Maximum saturation the player can accumulate. Default 5.0 (vanilla natural max); norovirus
-     * applies ADDITION toward 0 to reduce how much nutrition the body retains. Capped by a tick
-     * handler in SymptomEvents.
+     * Maximum saturation the player can accumulate. Default 5.0 (vanilla natural max).
+     * Reserved for symptom/disease hooks; capped by a tick handler in SymptomEvents.
      */
     public static final RegistryObject<Attribute> MAX_SATURATION = ATTRIBUTES.register(
             "disease_max_saturation",
@@ -26,7 +25,7 @@ public final class DiseaseAttributes {
 
     /**
      * Multiplied against the knockback strength the player deals on hit.
-     * Default 1.0 (normal knockback); cellulitis applies MULTIPLY_TOTAL toward 0.
+     * Default 1.0; pain applies MULTIPLY_TOTAL toward 0 via SymptomEvents.
      */
     public static final RegistryObject<Attribute> KNOCKBACK_FACTOR = ATTRIBUTES.register(
             "disease_knockback_factor",
@@ -35,7 +34,7 @@ public final class DiseaseAttributes {
 
     /**
      * Multiplied against the player's block-break speed (ForgeMod.BLOCK_BREAK_SPEED was added after
-     * 1.20.1; this custom attribute fills the same role). Default 1.0; disease effects apply
+     * 1.20.1; this custom attribute fills the same role). Default 1.0; pain applies
      * MULTIPLY_TOTAL toward 0. Applied in SymptomEvents via PlayerEvent.BreakSpeed.
      */
     public static final RegistryObject<Attribute> BLOCK_BREAK_SPEED = ATTRIBUTES.register(

@@ -22,6 +22,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
+import com.theblackbaron.simplediseases.network.DebugOverlayPacket;
+import com.theblackbaron.simplediseases.network.NetworkHandler;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.npc.Villager;
@@ -59,6 +61,7 @@ public class SdCommands {
                     UUID id = player.getUUID();
                     if (debugViralPlayers.remove(id)) {
                         player.sendSystemMessage(Component.literal("[SD] Viral debug overlay off."));
+                        NetworkHandler.sendDebugOverlay(player, DebugOverlayPacket.UPDATE_VIRAL, List.of(), List.of());
                     } else {
                         debugViralPlayers.add(id);
                         player.sendSystemMessage(Component.literal("[SD] Viral debug overlay on. Run again to toggle off."));
@@ -75,6 +78,7 @@ public class SdCommands {
                     UUID id = player.getUUID();
                     if (debugBacterialPlayers.remove(id)) {
                         player.sendSystemMessage(Component.literal("[SD] Bacterial debug overlay off."));
+                        NetworkHandler.sendDebugOverlay(player, DebugOverlayPacket.UPDATE_BACTERIAL, List.of(), List.of());
                     } else {
                         debugBacterialPlayers.add(id);
                         player.sendSystemMessage(Component.literal("[SD] Bacterial debug overlay on. Run again to toggle off."));

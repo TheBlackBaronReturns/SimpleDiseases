@@ -26,18 +26,13 @@ import net.minecraftforge.registries.RegistryObject;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Supplier;
 
 public class DiseaseEffects {
 
     public static final DeferredRegister<MobEffect> EFFECTS =
             DeferredRegister.create(ForgeRegistries.MOB_EFFECTS, SimpleDiseases.MOD_ID);
-
-    // --- Per-tier disease variants ------------------------------------------------------------------
-    private record BaseMod(Supplier<Attribute> attribute, String key, double amount, AttributeModifier.Operation op) {}
 
     // diseasePath -> (severity -> registered variant effect)
     private static final Map<String, EnumMap<Severity, RegistryObject<MobEffect>>> VARIANTS           = new HashMap<>();
@@ -47,84 +42,55 @@ public class DiseaseEffects {
     private static final Map<String, EnumMap<Severity, RegistryObject<MobEffect>>> SEPSIS_VARIANTS     = new HashMap<>();
 
     static {
-        // Cold — 3 tiers (Mild/Moderate/Severe). Severe tier: light fever.
-        registerDisease("cold", 0xf0c1ba, 3, List.of(
-            new BaseMod(() -> Attributes.ATTACK_SPEED,            "attack_speed",      -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL),
-            new BaseMod(DiseaseAttributes.BLOCK_BREAK_SPEED::get, "block_break_speed", -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-        ), Map.of(Severity.SEVERE, DiseaseMobEffect.FEVER_LIGHT));
+        // Cold — 3 tiers. Severe: light fever.
+        registerDisease("cold", 0xf0c1ba, 3, Map.of(Severity.SEVERE, DiseaseMobEffect.FEVER_LIGHT));
 
-        // Influenza — 4 tiers. Mild→mild fever, Moderate→high, Severe/Debilitating→severe.
-        registerDisease("flu", 0xC8302E, 4, List.of(
-            new BaseMod(() -> Attributes.ATTACK_SPEED,            "attack_speed",      -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL),
-            new BaseMod(DiseaseAttributes.BLOCK_BREAK_SPEED::get, "block_break_speed", -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
-        ), Map.of(
+        // Influenza — 4 tiers. Mild/Moderate: mild fever; Severe/Debilitating: high fever.
+        registerDisease("flu", 0xC8302E, 4, Map.of(
             Severity.MILD,         DiseaseMobEffect.FEVER_LIGHT,
+            Severity.MODERATE,     DiseaseMobEffect.FEVER_LIGHT,
+            Severity.SEVERE,       DiseaseMobEffect.FEVER_MILD,
+            Severity.DEBILITATING, DiseaseMobEffect.FEVER_MILD));
+
+        // RSV — 3 tiers. Severe only: mild fever (like cold).
+        registerDisease("rsv", 0xF2D027, 3, Map.of(Severity.SEVERE, DiseaseMobEffect.FEVER_LIGHT));
+
+        // Norovirus — 3 tiers. Severe: light fever.
+        registerDisease("norovirus", 0x5B8C3E, 3, Map.of(Severity.SEVERE, DiseaseMobEffect.FEVER_LIGHT));
+
+        // Pneumonia — 4-tier viral complication. Mild/Moderate: high fever; Severe/Debilitating: very high fever.
+        Map<Severity, Double> pneumoniaFever = Map.of(
+            Severity.MILD,         DiseaseMobEffect.FEVER_MILD,
             Severity.MODERATE,     DiseaseMobEffect.FEVER_MILD,
             Severity.SEVERE,       DiseaseMobEffect.FEVER_HIGH,
             Severity.DEBILITATING, DiseaseMobEffect.FEVER_HIGH
-        ));
-
-        // RSV — 3 tiers. Moderate→light fever, Severe→mild fever.
-        registerDisease("rsv", 0xF2D027, 3, List.of(
-            new BaseMod(() -> Attributes.ATTACK_SPEED,            "attack_speed",      -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL),
-            new BaseMod(DiseaseAttributes.BLOCK_BREAK_SPEED::get, "block_break_speed", -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
-        ), Map.of(
-            Severity.MODERATE, DiseaseMobEffect.FEVER_LIGHT,
-            Severity.SEVERE,   DiseaseMobEffect.FEVER_MILD
-        ));
-
-        // Norovirus — 3 tiers. Severe tier: light fever (same as cold).
-        registerDisease("norovirus", 0x5B8C3E, 3, List.of(
-            new BaseMod(DiseaseAttributes.MAX_SATURATION::get, "max_saturation", -2.0, AttributeModifier.Operation.ADDITION)
-        ), Map.of(Severity.SEVERE, DiseaseMobEffect.FEVER_LIGHT));
-
-        // Pneumonia — 4-tier viral complication. Same fever distribution as flu.
-        Map<Severity, Double> pneumoniaFever = Map.of(
-            Severity.MILD,         DiseaseMobEffect.FEVER_MILD,
-            Severity.MODERATE,     DiseaseMobEffect.FEVER_HIGH,
-            Severity.SEVERE,       DiseaseMobEffect.FEVER_SEVERE,
-            Severity.DEBILITATING, DiseaseMobEffect.FEVER_SEVERE
         );
-        List<BaseMod> pneumoniaMods = List.of(
-            new BaseMod(() -> Attributes.ATTACK_SPEED,            "attack_speed",      -0.20, AttributeModifier.Operation.MULTIPLY_TOTAL),
-            new BaseMod(DiseaseAttributes.BLOCK_BREAK_SPEED::get, "block_break_speed", -0.20, AttributeModifier.Operation.MULTIPLY_TOTAL)
-        );
-        registerPneumonia("pneumonia_flu",  pneumoniaMods, pneumoniaFever);
-        registerPneumonia("pneumonia_cold", pneumoniaMods, pneumoniaFever);
-        registerPneumonia("pneumonia_rsv",  pneumoniaMods, pneumoniaFever);
+        registerPneumonia("pneumonia_flu",  pneumoniaFever);
+        registerPneumonia("pneumonia_cold", pneumoniaFever);
+        registerPneumonia("pneumonia_rsv",  pneumoniaFever);
 
-        // Bronchitis — 3-tier viral complication. Same fever distribution as RSV.
+        // Bronchitis — 3-tier viral complication. Moderate: light fever; Severe: high fever.
         Map<Severity, Double> bronchitisFever = Map.of(
             Severity.MODERATE, DiseaseMobEffect.FEVER_LIGHT,
             Severity.SEVERE,   DiseaseMobEffect.FEVER_MILD
         );
-        List<BaseMod> bronchitisMods = List.of(
-            new BaseMod(() -> Attributes.ATTACK_SPEED,            "attack_speed",      -0.15, AttributeModifier.Operation.MULTIPLY_TOTAL),
-            new BaseMod(DiseaseAttributes.BLOCK_BREAK_SPEED::get, "block_break_speed", -0.15, AttributeModifier.Operation.MULTIPLY_TOTAL)
-        );
-        registerBronchitis("bronchitis_flu",  bronchitisMods, bronchitisFever);
-        registerBronchitis("bronchitis_cold", bronchitisMods, bronchitisFever);
-        registerBronchitis("bronchitis_rsv",  bronchitisMods, bronchitisFever);
+        registerBronchitis("bronchitis_flu",  bronchitisFever);
+        registerBronchitis("bronchitis_cold", bronchitisFever);
+        registerBronchitis("bronchitis_rsv",  bronchitisFever);
 
-        // Staph cellulitis — 3-tier. Mild→mild fever, Moderate→high, Severe→severe.
-        registerDisease("cellulitis_staph", 0xCC4422, 3, List.of(
-            new BaseMod(() -> Attributes.ATTACK_DAMAGE,          "attack_damage",    -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL),
-            new BaseMod(DiseaseAttributes.KNOCKBACK_FACTOR::get, "knockback_factor", -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
-        ), Map.of(
+        // Staph cellulitis — 3-tier. Mild: light; Moderate: high; Severe: very high fever.
+        registerDisease("cellulitis_staph", 0xCC4422, 3, Map.of(
             Severity.MILD,     DiseaseMobEffect.FEVER_LIGHT,
             Severity.MODERATE, DiseaseMobEffect.FEVER_MILD,
             Severity.SEVERE,   DiseaseMobEffect.FEVER_HIGH
         ));
 
-        // Staph sepsis — 4-tier. MILD/MODERATE have fever; SEVERE/DEBILITATING enter septic shock
-        // (perceived WORLD temperature is lowered — fever is removed from SEVERE).
-        List<BaseMod> sepsisMods = List.of(
-            new BaseMod(() -> Attributes.MAX_HEALTH, "max_health", -2.0, AttributeModifier.Operation.ADDITION)
-        );
-        registerSepsis("sepsis_staph", sepsisMods,
+        // Staph sepsis — 4-tier. Mild: very high fever; Moderate: hyperpyrexia;
+        // Severe/Debilitating: septic shock (fever removed — perceived WORLD temperature lowered).
+        registerSepsis("sepsis_staph",
             Map.of(
-                Severity.MILD,     DiseaseMobEffect.FEVER_MILD,
-                Severity.MODERATE, DiseaseMobEffect.FEVER_HIGH
+                Severity.MILD,     DiseaseMobEffect.FEVER_HIGH,
+                Severity.MODERATE, DiseaseMobEffect.FEVER_SEVERE
             ),
             Map.of(
                 Severity.SEVERE,       DiseaseMobEffect.SEPTIC_SHOCK_WORLD_OFFSET,
@@ -137,19 +103,24 @@ public class DiseaseEffects {
 
     // --- Registration helpers -----------------------------------------------------------------------
 
-    private static EnumMap<Severity, RegistryObject<MobEffect>> registerVariants(
-            String path, int color, int tierCount, List<BaseMod> baseMods) {
-        return registerVariants(path, color, tierCount, baseMods, Map.of(), Map.of());
+    private static void applyFeverShockModifiers(DiseaseMobEffect effect, String regName,
+                                                  double feverOffset, double shockOffset) {
+        if (feverOffset > 0.0) effect.fever(feverOffset);
+        if (shockOffset > 0.0) effect.shock(shockOffset);
+        double hpPenalty = DiseaseMobEffect.maxHealthPenaltyFracFor(feverOffset, shockOffset);
+        if (hpPenalty > 0.0) {
+            UUID hpUuid = UUID.nameUUIDFromBytes((regName + ":max_health").getBytes(StandardCharsets.UTF_8));
+            effect.modifier(Attributes.MAX_HEALTH, hpUuid, -hpPenalty, AttributeModifier.Operation.MULTIPLY_TOTAL);
+        }
     }
 
     private static EnumMap<Severity, RegistryObject<MobEffect>> registerVariants(
-            String path, int color, int tierCount, List<BaseMod> baseMods,
-            Map<Severity, Double> feverOffsets) {
-        return registerVariants(path, color, tierCount, baseMods, feverOffsets, Map.of());
+            String path, int color, int tierCount, Map<Severity, Double> feverOffsets) {
+        return registerVariants(path, color, tierCount, feverOffsets, Map.of());
     }
 
     private static EnumMap<Severity, RegistryObject<MobEffect>> registerVariants(
-            String path, int color, int tierCount, List<BaseMod> baseMods,
+            String path, int color, int tierCount,
             Map<Severity, Double> feverOffsets, Map<Severity, Double> shockOffsets) {
         EnumMap<Severity, RegistryObject<MobEffect>> byTier = new EnumMap<>(Severity.class);
         for (Severity sev : Severity.window(tierCount)) {
@@ -159,12 +130,7 @@ public class DiseaseEffects {
             RegistryObject<MobEffect> variant = EFFECTS.register(regName, () -> {
                 DiseaseMobEffect effect = new DiseaseMobEffect(MobEffectCategory.HARMFUL, color)
                         .sharedIcon(ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, path));
-                for (BaseMod m : baseMods) {
-                    UUID uuid = UUID.nameUUIDFromBytes((regName + ":" + m.key()).getBytes(StandardCharsets.UTF_8));
-                    effect.modifier(m.attribute().get(), uuid, m.amount() * sev.debuffMult, m.op());
-                }
-                if (feverOffset > 0.0) effect.fever(feverOffset);
-                if (shockOffset > 0.0) effect.shock(shockOffset);
+                applyFeverShockModifiers(effect, regName, feverOffset, shockOffset);
                 return effect;
             });
             byTier.put(sev, variant);
@@ -172,42 +138,22 @@ public class DiseaseEffects {
         return byTier;
     }
 
-    private static void registerDisease(String path, int color, int tierCount, List<BaseMod> baseMods) {
-        VARIANTS.put(path, registerVariants(path, color, tierCount, baseMods));
-    }
-
-    private static void registerDisease(String path, int color, int tierCount, List<BaseMod> baseMods,
+    private static void registerDisease(String path, int color, int tierCount,
                                          Map<Severity, Double> feverOffsets) {
-        VARIANTS.put(path, registerVariants(path, color, tierCount, baseMods, feverOffsets));
+        VARIANTS.put(path, registerVariants(path, color, tierCount, feverOffsets));
     }
 
-    private static void registerPneumonia(String path, List<BaseMod> baseMods) {
-        PNEUMONIA_VARIANTS.put(path, registerVariants(path, 0x6B5876, 4, baseMods));
+    private static void registerPneumonia(String path, Map<Severity, Double> feverOffsets) {
+        PNEUMONIA_VARIANTS.put(path, registerVariants(path, 0x6B5876, 4, feverOffsets));
     }
 
-    private static void registerPneumonia(String path, List<BaseMod> baseMods, Map<Severity, Double> feverOffsets) {
-        PNEUMONIA_VARIANTS.put(path, registerVariants(path, 0x6B5876, 4, baseMods, feverOffsets));
+    private static void registerBronchitis(String path, Map<Severity, Double> feverOffsets) {
+        BRONCHITIS_VARIANTS.put(path, registerVariants(path, 0x8A6A42, 3, feverOffsets));
     }
 
-    private static void registerBronchitis(String path, List<BaseMod> baseMods) {
-        BRONCHITIS_VARIANTS.put(path, registerVariants(path, 0x8A6A42, 3, baseMods));
-    }
-
-    private static void registerBronchitis(String path, List<BaseMod> baseMods, Map<Severity, Double> feverOffsets) {
-        BRONCHITIS_VARIANTS.put(path, registerVariants(path, 0x8A6A42, 3, baseMods, feverOffsets));
-    }
-
-    private static void registerSepsis(String path, List<BaseMod> baseMods) {
-        SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, baseMods));
-    }
-
-    private static void registerSepsis(String path, List<BaseMod> baseMods, Map<Severity, Double> feverOffsets) {
-        SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, baseMods, feverOffsets));
-    }
-
-    private static void registerSepsis(String path, List<BaseMod> baseMods,
+    private static void registerSepsis(String path,
                                         Map<Severity, Double> feverOffsets, Map<Severity, Double> shockOffsets) {
-        SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, baseMods, feverOffsets, shockOffsets));
+        SEPSIS_VARIANTS.put(path, registerVariants(path, 0x5C2B5C, 4, feverOffsets, shockOffsets));
     }
 
     // --- Public variant lookups ---------------------------------------------------------------------
@@ -296,6 +242,14 @@ public class DiseaseEffects {
     public static boolean hasSepticShock(LivingEntity e) {
         for (net.minecraft.world.effect.MobEffectInstance inst : e.getActiveEffects()) {
             if (inst.getEffect() instanceof DiseaseMobEffect dme && dme.getShockOffset() > 0.0)
+                return true;
+        }
+        return false;
+    }
+
+    public static boolean hasMaxHealthPenalty(LivingEntity e) {
+        for (net.minecraft.world.effect.MobEffectInstance inst : e.getActiveEffects()) {
+            if (inst.getEffect() instanceof DiseaseMobEffect dme && dme.maxHealthPenaltyFrac() > 0.0)
                 return true;
         }
         return false;
