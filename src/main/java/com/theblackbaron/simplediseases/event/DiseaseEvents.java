@@ -16,11 +16,13 @@ import com.theblackbaron.simplediseases.status.component.ProgressComponent;
 import com.theblackbaron.simplediseases.status.component.SourceComponent;
 import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.component.TierComponent;
+import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
+import com.theblackbaron.simplediseases.status.manager.AccumFatigueManager;
 import com.theblackbaron.simplediseases.status.manager.ContagionManager;
 import com.theblackbaron.simplediseases.status.manager.FluSeasonManager;
 import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
@@ -67,6 +69,8 @@ public class DiseaseEvents {
     private static final int    VOMIT_PARTICLE_TICKS        = 40;
     private static final int[]  COUGH_BURST_OFFSETS         = { 0, 8, 17, 26 };
 
+    private static final int    CAP_RECOVERY_BIT            = 1 << 30;
+
     private final Map<UUID, PlayerDiseaseState> states                = new HashMap<>();
     private final WetnessManager                wetnessManager        = new WetnessManager();
     private final FluSeasonManager              fluSeasonManager      = new FluSeasonManager();
@@ -76,7 +80,6 @@ public class DiseaseEvents {
     private final Set<UUID>                     debugViralPlayers     = new HashSet<>();
     private final Set<UUID>                     debugBacterialPlayers = new HashSet<>();
     private final Set<ResourceLocation>         suppressedEpisodeSourcesCache = new HashSet<>();
-    private final Set<String>                     suppressedRecoveryCache       = new HashSet<>();
     private final Map<UUID, Boolean>            windchillCachedVal    = new HashMap<>();
     private final Map<UUID, Long>               windchillCachedAt     = new HashMap<>();
     private final Map<UUID, Long>               vomitParticleUntil    = new HashMap<>();
@@ -225,23 +228,25 @@ public class DiseaseEvents {
         }
 
         double windRate = 0.0;
+        boolean[] viralEnvFlag = { false };
         if (!reservoirActive) {
             if (isDamp && !player.isUnderWater()) {
                 if (ColdSweatCompat.isColdEnoughForDamp(player)) {
                     double worldTemp = ColdSweatCompat.getWorldTemp(player);
                     double rate = ColdSweatCompat.getColdRate(worldTemp) * ImmuneManager.getDampMultiplier(player);
-                    active = accumulate(player, state, rate, active);
+                    active = accumulate(player, state, rate, active, viralEnvFlag);
                 }
             } else if (!isDamp && cachedIsInWindchill(player, gameTime)) {
                 if (ColdSweatCompat.isColdEnoughForWindchill(player)) {
                     windRate = WindchillManager.BASE_RATE
                             * WindchillManager.getMitigationFactor(player)
                             * ImmuneManager.getWindchillMultiplier(player);
-                    active = accumulate(player, state, windRate, active);
+                    active = accumulate(player, state, windRate, active, viralEnvFlag);
                 }
             }
         }
         boolean windActive = windRate > 0.0;
+        boolean viralEnvAccumulatedThisTick = viralEnvFlag[0];
         tickChillyWindIndicator(player, state, windActive);
 
         boolean anyActive = active != null
@@ -250,21 +255,18 @@ public class DiseaseEvents {
                 || state.progress(DiseaseRegistry.CELLULITIS_STAPH) > 0.0
                 || state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH);
 
+        double viralRecoveryMult = ColdSweatCompat.getRecoveryMultiplier(
+                player, DiseaseRegistry.GROUP_VIRAL, viralEnvAccumulatedThisTick);
+        double bacterialRecoveryMult = ColdSweatCompat.getRecoveryMultiplier(
+                player, DiseaseRegistry.GROUP_BACTERIAL, false);
+
         if (anyActive) {
-            suppressedRecoveryCache.clear();
-            if (isDamp || windActive || !ColdSweatCompat.isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_VIRAL)) {
-                suppressedRecoveryCache.add(DiseaseRegistry.GROUP_VIRAL);
-            }
-            if (!ColdSweatCompat.isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_BACTERIAL)) {
-                suppressedRecoveryCache.add(DiseaseRegistry.GROUP_BACTERIAL);
-            }
             String complicationWorseningGroup = (isDamp || windActive) ? DiseaseRegistry.GROUP_VIRAL : null;
 
-            // Build the set of source-disease IDs whose episodes should be suppressed this tick.
-            // A complication suppresses its source once it passes its first symptom threshold (0.1).
             buildSuppressedEpisodeSources(state, suppressedEpisodeSourcesCache);
 
-            DiseaseContext ctx = new DiseaseContext(player, suppressedRecoveryCache, complicationWorseningGroup,
+            DiseaseContext ctx = new DiseaseContext(player, viralEnvAccumulatedThisTick,
+                    viralRecoveryMult, bacterialRecoveryMult, complicationWorseningGroup,
                     gameTime, lingering, state, suppressedEpisodeSourcesCache);
             tickExistingDiseases(state, ctx, false);
             tickExistingDiseases(state, ctx, true);
@@ -275,6 +277,8 @@ public class DiseaseEvents {
             }
         }
 
+        AccumFatigueManager.tick(player, state, viralEnvAccumulatedThisTick);
+
         contagionManager.tick(player, state);
         PersistentEffectService.syncForPlayer(player, state);
 
@@ -282,8 +286,12 @@ public class DiseaseEvents {
 
         UUID pid = player.getUUID();
         if (gameTime % 20 == 0) {
-            if (debugViralPlayers.contains(pid))    showViralDebug(player, state, isDamp);
-            if (debugBacterialPlayers.contains(pid)) showBacterialDebug(player, state);
+            if (debugViralPlayers.contains(pid)) {
+                showViralDebug(player, state, isDamp, viralEnvAccumulatedThisTick, viralRecoveryMult);
+            }
+            if (debugBacterialPlayers.contains(pid)) {
+                showBacterialDebug(player, state, bacterialRecoveryMult);
+            }
         }
     }
 
@@ -428,10 +436,15 @@ public class DiseaseEvents {
         return symptoms != null && (symptoms.mask != 0 || symptoms.nextEpisodeAt != 0L);
     }
 
-    private ResourceLocation accumulate(ServerPlayer player, PlayerDiseaseState state, double amount, ResourceLocation active) {
+    private ResourceLocation accumulate(ServerPlayer player, PlayerDiseaseState state, double amount,
+                                        ResourceLocation active, boolean[] viralEnvFlag) {
         if (amount <= 0.0) return active;
         long gameTime = player.level().getGameTime();
-        if (active != null) { state.addProgress(active, amount); return active; }
+        if (active != null) {
+            state.addProgress(active, amount);
+            viralEnvFlag[0] = true;
+            return active;
+        }
         if (state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)) return null;
         if (state.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)) return null;
 
@@ -447,11 +460,13 @@ public class DiseaseEvents {
             double chance = v.acquisition().chance(winter, fluWindowOpen, outbreak);
             if (chance > 0.0 && player.getRandom().nextFloat() < chance) {
                 state.addProgress(v.id(), amount);
+                viralEnvFlag[0] = true;
                 return v.id();
             }
         }
         if (defaultDef != null) {
             state.addProgress(defaultDef.id(), amount);
+            viralEnvFlag[0] = true;
             return defaultDef.id();
         }
         return null;
@@ -504,7 +519,8 @@ public class DiseaseEvents {
     // VIRAL DEBUG OVERLAY (/sddebugviral)
     // =========================================================================
 
-    private void showViralDebug(ServerPlayer player, PlayerDiseaseState state, boolean isDamp) {
+    private void showViralDebug(ServerPlayer player, PlayerDiseaseState state, boolean isDamp,
+                                boolean viralEnvAccum, double viralRecoveryMult) {
         long gameTime = player.level().getGameTime();
         double worldTemp = ColdSweatCompat.getWorldTemp(player);
         MobEffectInstance dampEffect = player.getEffect(DiseaseEffects.DAMP.get());
@@ -574,9 +590,15 @@ public class DiseaseEvents {
             noroSrcStr += String.format(" §2INCUBATION(%s)§r§7:§a%.2f§r", incubationTag, state.getPendingIncubation());
         }
 
+        String accumStr = viralEnvAccum ? " §cACCUM§r" : "";
+        long exposureSecs = state.getAccumFatigueStreakTicks() / 20L;
+        double drainRate = latchedRecoveryRate(state, activeId) * viralRecoveryMult;
+        String recoveryStr = String.format(" §frecov:§e%.2f§r%s §fexposure:§e%ds§r §fdrain:§e%.6f§r",
+                viralRecoveryMult, accumStr, exposureSecs, drainRate);
+
         String msg = String.format(
-            "§7[SDv]%s%s%s%s%s%s%s §fwet:§e%.2f §fdry:§e%.4f §fW:§e%.1f",
-            diseaseStr, complicationStr, dampStr, fluSeasonStr, windStr, epStr, noroSrcStr,
+            "§7[SDv]%s%s%s%s%s%s%s%s §fwet:§e%.2f §fdry:§e%.4f §fW:§e%.1f",
+            diseaseStr, complicationStr, dampStr, fluSeasonStr, windStr, epStr, noroSrcStr, recoveryStr,
             state.getWetProgress(),
             ColdSweatCompat.getDryRate(player), worldTemp
         );
@@ -587,7 +609,8 @@ public class DiseaseEvents {
     // BACTERIAL DEBUG OVERLAY (/sddebugbacterial)
     // =========================================================================
 
-    private void showBacterialDebug(ServerPlayer player, PlayerDiseaseState state) {
+    private void showBacterialDebug(ServerPlayer player, PlayerDiseaseState state,
+                                    double bacterialRecoveryMult) {
         long gameTime = player.level().getGameTime();
 
         // Bacterial group immunity
@@ -645,8 +668,51 @@ public class DiseaseEvents {
         }
         String epStr = buildEpStr(state, activeId, gameTime);
 
-        String msg = String.format("§7[SDb]%s%s%s%s", bacterialStr, sepsisStr, lacStr, epStr);
+        boolean cellulitisCap = isCellulitisCapRecovery(state);
+        boolean onlyNonRecovering = state.inRecovery(DiseaseRegistry.SEPSIS_STAPH)
+                || state.inRecovery(DiseaseRegistry.MOF_STAPH);
+        boolean cellulitisRelevant = state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)
+                || state.progress(DiseaseRegistry.CELLULITIS_STAPH) > 0.0;
+        double recovDisplay = cellulitisRelevant ? bacterialRecoveryMult
+                : (onlyNonRecovering ? 0.0 : bacterialRecoveryMult);
+        double drainRate = 0.0;
+        if (cellulitisCap) {
+            DiseaseDef cellDef = DiseaseRegistry.get(DiseaseRegistry.CELLULITIS_STAPH);
+            if (cellDef instanceof BacterialDiseaseDef bdef) {
+                drainRate = bdef.recoveryRate() * bacterialRecoveryMult;
+            }
+        }
+        String recoveryStr = String.format(" §frecov:§e%.2f§r §fdrain:§e%.6f§r", recovDisplay, drainRate);
+
+        String msg = String.format("§7[SDb]%s%s%s%s%s", bacterialStr, sepsisStr, lacStr, epStr, recoveryStr);
         player.displayClientMessage(Component.literal(msg), true);
+    }
+
+    private static boolean isCellulitisCapRecovery(PlayerDiseaseState state) {
+        DiseaseInstance inst = state.peek(DiseaseRegistry.CELLULITIS_STAPH);
+        if (inst == null) return false;
+        ProgressComponent prog = inst.get(Components.PROGRESS);
+        TierComponent tier = inst.get(Components.TIER);
+        if (prog == null || tier == null || !prog.inRecovery) return false;
+        if ((tier.worseningChecks & CAP_RECOVERY_BIT) != 0) return true;
+        DiseaseDef def = DiseaseRegistry.get(DiseaseRegistry.CELLULITIS_STAPH);
+        return def instanceof BacterialDiseaseDef bdef && prog.progress >= bdef.progressCap();
+    }
+
+    private static double latchedRecoveryRate(PlayerDiseaseState state, ResourceLocation activeId) {
+        if (activeId == null || !state.inRecovery(activeId)) return 0.0;
+        DiseaseDef def = DiseaseRegistry.get(activeId);
+        if (def instanceof ViralDiseaseDef v) return v.recoveryRate();
+        if (def instanceof ComplicationDiseaseDef cdef) {
+            if (cdef.passiveRecoveryRate().isPresent()) return cdef.passiveRecoveryRate().get();
+            if (cdef.triggeredBy().isPresent()) return 0.0;
+            DiseaseInstance inst = state.peek(activeId);
+            SourceComponent src = inst != null ? inst.get(Components.SOURCE) : null;
+            ResourceLocation srcId = src != null ? src.sourceId : null;
+            DiseaseDef sdef = srcId != null ? DiseaseRegistry.get(srcId) : null;
+            return (sdef instanceof ViralDiseaseDef v) ? v.recoveryRate() : 0.00003;
+        }
+        return 0.0;
     }
 
     private String buildEpStr(PlayerDiseaseState state, ResourceLocation activeId, long gameTime) {

@@ -1,5 +1,6 @@
 package com.theblackbaron.simplediseases.status.category;
 
+import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.manager.LingeringNorovirusManager;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
 import net.minecraft.resources.ResourceLocation;
@@ -8,9 +9,10 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.Set;
 
 /**
- * Per-tick inputs handed to a {@link DiseaseCategory#tick}. Recovery suppression is per exclusion
- * group. Complication worsening is tracked separately so "too cold to recover" stalls complications
- * without making them accumulate. {@link #lingering} is the world-puddle manager.
+ * Per-tick inputs handed to a {@link DiseaseCategory#tick}. Recovery uses precomputed multipliers
+ * (0.0–1.0) from {@link com.theblackbaron.simplediseases.compat.ColdSweatCompat}. Complication
+ * worsening is tracked separately via {@link #worsensComplication}. {@link #lingering} is the
+ * world-puddle manager.
  *
  * <p>{@link #suppressedEpisodeSources} is the set of source-disease IDs whose symptom episodes
  * should be skipped this tick — populated in DiseaseEvents when any of their complication children
@@ -19,15 +21,18 @@ import java.util.Set;
  */
 public record DiseaseContext(
     ServerPlayer              player,
-    Set<String>               suppressedRecoveryGroups,
+    boolean                   viralEnvironmentalAccumulating,
+    double                    viralRecoveryMultiplier,
+    double                    bacterialRecoveryMultiplier,
     String                    complicationWorseningGroup,
     long                      gameTime,
     LingeringNorovirusManager lingering,
     PlayerDiseaseState        state,
     Set<ResourceLocation>     suppressedEpisodeSources
 ) {
-    public boolean suppressRecovery(String exclusionGroup) {
-        return suppressedRecoveryGroups.contains(exclusionGroup);
+    public double recoveryMultiplier(String exclusionGroup) {
+        return DiseaseRegistry.GROUP_BACTERIAL.equals(exclusionGroup)
+                ? bacterialRecoveryMultiplier : viralRecoveryMultiplier;
     }
 
     public boolean worsensComplication(String exclusionGroup) {

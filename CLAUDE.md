@@ -13,6 +13,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 There is no test framework. Verify features by running the client (`./gradlew runClient`).
 
+## Development Principles
+
+**After correctness, the highest priorities for every change are performance, multiplayer compatibility, and broad mod compatibility.** Treat these as hard constraints.
+
+- **Performance:** Server-authoritative ticks; precompute per-tick values once in `DiseaseEvents`; reuse caches (`suppressedEpisodeSourcesCache`, windchill cache); avoid per-player allocations on hot paths.
+- **Multiplayer:** Gameplay on server; world particles via `sendParticles` (visible to nearby players); `MobEffectInstance` sync for model/HUD state; custom packets only for local HUD (`BleedingSplatterPacket`).
+- **Mod compatibility:** Optional mods only through `compat/` with offline fallbacks; `require = 0` on optional mixins; runtime detection (`ColdSweatCompat.LOADED`, `ModList`).
+
+See **agents.md → Development Principles** for the full table.
+
 ## Stack
 
 Minecraft 1.20.1 · Forge 47.4.10 · Parchment mappings 2023.09.03-1.20.1 · Java 17 · Mixin 0.7+
@@ -23,8 +33,9 @@ Optional runtime deps (detected at runtime, never called directly): Cold Sweat (
 
 The mod is structured around an **ECS-lite disease model**:
 
-- `PlayerDiseaseState` — per-player root, holds `Map<ResourceLocation, DiseaseInstance>` plus wetness progress, pending incubation, and injury state. Persisted via NBT on the player entity.
+- `PlayerDiseaseState` — per-player root, holds `Map<ResourceLocation, DiseaseInstance>` plus wetness progress, pending incubation, accumulation-fatigue streak, group immunity, and injury state. Persisted via NBT on the player entity.
 - `DiseaseInstance` — carries a component bag: `ProgressComponent`, `TierComponent`, `SymptomPoolComponent`, optional `SourceComponent` (complications only).
+- `DiseaseContext` — per-tick record passed to categories: precomputed viral/bacterial recovery multipliers, `viralEnvironmentalAccumulating`, complication worsening group, suppressed episode sources.
 - `DiseaseRegistry` — single source of truth for all disease definitions, partitioned into `viral()`, `bacterial()`, `complications()`, `contagious()`, `environmental()`. All definitions are created in `bootstrap()` at mod init.
 - `DiseaseDef` subtypes — `ViralDiseaseDef`, `BacterialDiseaseDef`, `ComplicationDiseaseDef` — each carries a `DiseaseCategory` that determines which components are valid and what tick logic applies.
 - `DiseaseEffects` / `DiseaseAttributes` — `DeferredRegister`-backed registries for `MobEffect` and `RangedAttribute`.
@@ -41,16 +52,18 @@ The mod is structured around an **ECS-lite disease model**:
 
 | Class / Package | Responsibility |
 |---|---|
-| `event/DiseaseEvents.java` | Per-tick: acquisition, progression, symptoms, complication gating |
+| `event/DiseaseEvents.java` | Per-tick: acquisition, progression, recovery multipliers, accum fatigue, symptoms, complication gating |
 | `event/CureEvents.java` | Treatment items (broths, honey) + sleep recovery |
 | `event/SymptomEvents.java` | Symptom-driven interactions (sore throat eat damage, stomach cramps block healing, pain blocks sleep) |
+| `status/manager/AccumFatigueManager` | Anti-exploit damp/wind streak → warn / immunodeficiency while latched curable |
+| `status/def/WorseningRoll` | Shared stochastic momentum: `min(1, 0.30 + 0.25 × worsenings)` |
 | `status/manager/ContagionManager` | Player↔player, player↔villager, villager↔villager transmission; committed incubation model |
 | `status/manager/WetnessManager` | `wetProgress` accumulation from rain/water; drives Damp respiratory exposure |
 | `status/manager/WaterborneManager` | Deterministic 32×32 infected reservoir regions for Norovirus |
 | `status/manager/InjuryManager` | Flesh wounds from bladed damage; seeds Cellulitis |
 | `status/manager/FluSeasonManager` | Persisted flu season state (`FluSeasonData` via Forge `SavedData`) |
 | `status/service/SymptomService` | Episode timers, symptom pools, duration/interval scaling by Severity tier |
-| `compat/ColdSweatCompat` | All Cold Sweat temperature queries; fallback proxy for when mod is absent |
+| `compat/ColdSweatCompat` | All Cold Sweat temperature queries; recovery multiplier; fallback proxy when mod absent |
 | `compat/SereneSeasonsCompat` | All Serene Seasons season queries; fallback when mod is absent |
 | `mixin/EffectRendererMixin` | JEED tooltip injection — inserts fever label under "When Applied:"; `require = 0` makes it optional |
 | `mixin/MobEffectTextureManagerMixin` | Redirects per-tier disease effect sprite lookup to `DiseaseMobEffect.sharedIconId` |
@@ -89,8 +102,12 @@ Sepsis exclusive pair: Localized Redness ↔ Mottled Skin. See agents.md for act
 - **New MobEffect tiers use `DiseaseEffects.registerVariants()`.** It creates one `DiseaseMobEffect` per `Severity` in the window and scales modifiers by `debuffMult`. Each tier gets `.sharedIcon(path)` so all severities use `textures/mob_effect/<path>.png`.
 - **MOF uses a single effect** `DiseaseEffects.MOF` registered as `mof` (disease id remains `mof_staph`).
 - **Persistent pain** is `DiseaseEffects.PAIN` (`pain`), not per-tier variants.
-- **Fever is a `double feverOffset` field on `DiseaseMobEffect`, not an attribute modifier.** `getFeverOffset()` is read by `ColdSweatCompat.feverOffset()` and `EffectRendererMixin`. Never add fever as an attribute.
+- **Fever is a `double feverOffset` field on `DiseaseMobEffect`, not an attribute modifier.** Levels: +0.05 / +0.10 / +0.15 / +0.20 (MC WORLD scale). `getFeverOffset()` is read by `ColdSweatCompat.feverOffset()` and `EffectRendererMixin`. Never add fever as an attribute.
+- **Recovery multiplier:** `ColdSweatCompat.getRecoveryMultiplier(player, group, envAccumulating)`. Viral base floor 0.75; bacterial base floor 0.60; full fever on both. Precompute in `DiseaseEvents`; categories use `ctx.recoveryMultiplier(group)`. Viral env accum forces 0.0.
+- **Worsening:** `WorseningRoll.chance(worsenings)` for momentum stochastic tier upgrades (viral, bacterial pre-cap, stochastic complications).
+- **Accum fatigue:** `AccumFatigueManager.tick()` — 8 min warn, 15 min immunodeficiency; streak decays 1/tick when dry.
 - **Complications require a source.** `ComplicationDiseaseDef.triggeredBy` names the source disease path; progress only accumulates while the source is active. Sepsis requires Cellulitis; MOF requires Sepsis.
 - **All compat calls must go through `ColdSweatCompat` / `SereneSeasonsCompat`.** Never call Cold Sweat or Serene Seasons classes directly elsewhere.
 - **Symptom episodes are managed by `SymptomService`.** Do not apply symptom `MobEffectInstance`s manually in tick handlers; add them to the disease's `SymptomConfig` instead.
+- **Multiplayer visuals:** world particles and body shiver are server-broadcast / effect-synced; HUD overlays are player-local packets only.
 - **Serene Seasons compile stubs live under `src/main/java/sereneseasons/`.** They are excluded from the packaged JAR via the `exclude 'sereneseasons/**'` rule in `build.gradle`.

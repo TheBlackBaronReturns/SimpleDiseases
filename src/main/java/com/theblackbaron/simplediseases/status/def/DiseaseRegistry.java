@@ -235,7 +235,7 @@ public final class DiseaseRegistry {
             1.0 / 4800.0,
             1.0 / 12000.0,
             1.0 / 9000.0,
-            List.of(4.0 / 3.0, 5.0 / 3.0),
+            List.of(1.5, 2.0),
             symptomConfig(
                 List.of(
                     new SymptomEntry(DiseaseEffects.LOCALIZED_REDNESS, SymptomAction.NONE, SymptomTiming.STATIC)

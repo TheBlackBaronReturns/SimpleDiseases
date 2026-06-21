@@ -20,9 +20,23 @@ No test framework. Verify features in-client.
 
 ---
 
+## Development Principles
+
+**After correctness, the highest priorities for every change are performance, multiplayer compatibility, and broad mod compatibility.** Treat these as hard constraints, not nice-to-haves.
+
+| Principle | Expectation |
+|---|---|
+| **Performance** | Server-authoritative tick logic; precompute per-tick values once (e.g. recovery multipliers in `DiseaseEvents`); reuse collection caches; avoid per-player allocations on hot paths; prefer primitives and in-place mutation over new objects each tick. |
+| **Multiplayer** | Gameplay state lives on the server and syncs through vanilla channels (`MobEffectInstance`, NBT persistence) or minimal custom packets. World feedback uses `ServerLevel.sendParticles()` so nearby players see vomit, blood, cough, and ambient disease particles. Reserve `PacketDistributor.PLAYER` for **local HUD only** (e.g. `BleedingSplatterPacket`). Body shiver renders on all clients via synced effects + `LivingEntityRendererMixin`. |
+| **Mod compatibility** | Never call optional-mod classes outside `compat/` packages. Cold Sweat and Serene Seasons must have **offline fallbacks**. Optional client mixins use `require = 0` where appropriate (JEED). Detect mods at runtime (`ModList`, `ColdSweatCompat.LOADED`), never assume presence. |
+
+When a feature conflicts with these principles, redesign the feature — do not bolt on client-only state or hard dependencies.
+
+---
+
 ## Architecture Overview
 
-ECS-lite disease model: `PlayerDiseaseState` holds per-disease `DiseaseInstance` component bags, plus wetness, incubation, group immunity, and `PlayerInjuryState`. Categories (`ViralCategory`, `BacterialCategory`, `ComplicationCategory`) tick via `DiseaseContext` built each tick in `DiseaseEvents`.
+ECS-lite disease model: `PlayerDiseaseState` holds per-disease `DiseaseInstance` component bags, plus wetness, incubation, group immunity, accumulation-fatigue streak, and `PlayerInjuryState`. Categories (`ViralCategory`, `BacterialCategory`, `ComplicationCategory`) tick via `DiseaseContext` built each tick in `DiseaseEvents`.
 
 ```
 com.theblackbaron.simplediseases
@@ -36,6 +50,9 @@ com.theblackbaron.simplediseases
 ├── particle/                     — DiseaseParticles registry + DiseaseParticleEmitter
 ├── sound/DiseaseSounds.java
 └── status/                       — Effects, attributes, defs, managers, services
+    ├── category/                 — DiseaseContext, Viral/Bacterial/Complication categories
+    ├── def/                      — DiseaseRegistry, WorseningRoll
+    └── manager/                  — Contagion, Wetness, Injury, FluSeason, AccumFatigue, …
 ```
 
 **Wiring (`SimpleDiseases` constructor):** `DiseaseAttributes` → `DiseaseEffects` → `DiseaseParticles` / `DiseaseSounds` → `DiseaseRegistry.bootstrap()` → Forge event handlers.
@@ -162,6 +179,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Severe (ADV) | Hypotension (`HYPOTENSION`); Tachycardia; Confusion |
 | Persistent | Malaise + Pain II |
 | Episode pacing | 60–180 s · 30–90 s |
+| Worsening thresholds | **1.5, 2.0** (aligned with cold; cap = 2.0) |
 
 ### `sepsis_staph` — Bacterial complication · 4 tiers · triggered by severe cellulitis at cap
 
@@ -205,12 +223,12 @@ Rolled once at first latch. Honey reduces tier: 35% base, ×0.5 per prior succes
 
 `double feverOffset` on `DiseaseMobEffect` — **not** an attribute modifier.
 
-| Level | Offset | Display |
+| Level | Offset (MC WORLD scale) | JEED display |
 |---|---|---|
-| Light | +10 | Yellow |
-| Mild | +20 | Gold |
-| High | +35 | Red |
-| Severe | +50 | Dark red |
+| Light | +0.05 | Mild Fever (38°C) |
+| Mild | +0.10 | High Fever (39°C) |
+| High | +0.15 | Very High Fever (40°C) |
+| Severe | +0.20 | Hyperpyrexia (≥41°C) |
 
 - **Tooltip:** `EffectRendererMixin` injects colored fever/shock/pain/symptom rows under JEED `"potion.whenDrank"` (`require = 0`). Fever and septic shock use tier-specific icons (`fever_light` … `fever_severe`, `septic_shock`) via `IconTextTooltipRenderer`.
 - **Cold Sweat WORLD modifiers:** `FeverWorldTempModifier` (+) and `SepticShockTempModifier` (−) synced each tick via `ColdSweatCompat.syncDiseaseWorldModifiers`.
@@ -218,20 +236,58 @@ Rolled once at first latch. Honey reduces tier: 35% base, ×0.5 per prior succes
 
 ---
 
-## Recovery Gate (Centralized)
+## Recovery Multiplier (Centralized)
 
-Passive recovery requires environmental warmth, not elevated BODY temperature.
+Passive recovery drains progress at `recoveryRate × multiplier`. Multiplier is **0.0–1.0** (minimum drain floor **0.25×** when partially warm). Requires environmental warmth, not elevated BODY temperature.
 
-**API:** `ColdSweatCompat.isWarmEnoughForRecovery(player, exclusionGroup)`
-- Viral / complications: full fever offset (`isWarmEnoughToRecover()` wrapper)
-- Bacterial: fever offset × **0.5** (`isWarmEnoughForBacterialRecovery()` wrapper)
-- Threshold: `MIN_WORLD_TEMP_TO_RECOVER` (0.75) + scaled fever offset vs `getObjectiveRecoveryWarmth()` (WORLD minus disease perception modifiers + insulation + hot waterskin)
+**API:** `ColdSweatCompat.getRecoveryMultiplier(player, exclusionGroup, envAccumulating)`
 
-**Per-tick suppression:** `DiseaseEvents` builds `suppressedRecoveryGroups` (`Set<String>`) on `DiseaseContext`:
-- **Viral:** damp exposure, active windchill accumulation, or failed warmth check
-- **Bacterial:** failed warmth check only (damp/wind do not block cellulitis recovery)
+| Input | Effect |
+|---|---|
+| `envAccumulating == true` | Returns **0.0** immediately (viral only — damp/wind added progress this tick) |
+| Warmth ≥ threshold | **1.0** |
+| Warmth ≤ base floor | **0.25** (`SUPPRESSED_RECOVERY_MIN`) |
+| Between floor and threshold | Linear **0.25 → 1.0** |
 
-Categories call `ctx.suppressRecovery(group)` before draining progress (`ViralCategory`, `ComplicationCategory`, `BacterialCategory` cap-recovery).
+**Threshold:** `base_floor + max_fever_offset` vs `getObjectiveRecoveryWarmth()` (WORLD minus disease perception modifiers + insulation + hot waterskin). Fever raises the threshold; its WORLD modifier is stripped from warmth so body heat does not cheat the gate.
+
+| Group | Base floor | Fever scale | When multiplier applies |
+|---|---|---|---|
+| Viral + viral complications | `MIN_WORLD_TEMP_TO_RECOVER` (**0.75**) | Full | Whole latched recovery; **paused** while damp/wind accumulates |
+| Bacterial (cellulitis cap-recovery) | `MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL` (**0.60**) | Full | Cap-recovery phase only; damp/wind do **not** pause drain |
+| Sepsis / MOF | — | — | No passive recovery |
+
+`isWarmEnoughForRecovery()` ≡ `getRecoveryMultiplier(..., false) >= 1.0`.
+
+**`DiseaseContext`** (built once per tick in `DiseaseEvents`): precomputed `viralRecoveryMultiplier`, `bacterialRecoveryMultiplier`, `viralEnvironmentalAccumulating`, `complicationWorseningGroup`, `suppressedEpisodeSources`. Categories call `ctx.recoveryMultiplier(group)` — never re-query `ColdSweatCompat` inside category ticks.
+
+---
+
+## Stochastic Worsening (`WorseningRoll`)
+
+Shared momentum model for viral, bacterial (cap phase), and stochastic viral complications:
+
+```
+chance(worsenings) = min(1.0, 0.30 + 0.25 × worsenings)
+```
+
+Replaces the old decay formula (`0.35 × 0.5^worsenings`). Used by `ViralCategory`, `BacterialCategory` (pre-cap), and `ComplicationCategory` (post-latch stochastic branch).
+
+---
+
+## Accumulation Fatigue (`AccumFatigueManager`)
+
+Anti-exploit for standing in rain/wind while latched on a curable disease. **Not** a flat latched timer — streak grows only when **latched curable + viral env accumulating** this tick.
+
+| Constant | Value |
+|---|---|
+| `ACCUM_FATIGUE_WARN_TICKS` | 8 min (9600 ticks) — actionbar warn |
+| `ACCUM_FATIGUE_PENALTY_TICKS` | 15 min (18000 ticks) — apply `IMMUNE_DEFICIENCY` |
+| `ACCUM_FATIGUE_DECAY_PER_TICK` | 1 — streak decays while latched but dry (prevents shelter-dip exploit) |
+
+- **Latched curable:** any `inRecovery` disease except sepsis / MOF. Cellulitis counts but does not drive streak alone (needs viral damp/wind accum flag).
+- **On cure:** clears fatigue-applied `IMMUNE_DEFICIENCY` and streak; does **not** remove `/sdimmune deficient`.
+- Lang: `message.simplediseases.accum_fatigue_warn`, `message.simplediseases.accum_fatigue`.
 
 ---
 
@@ -367,6 +423,16 @@ Per-tier disease `MobEffect`s still register separately (gameplay modifiers, fev
 
 Disease ambient particles (cold/flu/rsv/norovirus) still use `DiseaseParticleEmitter.tick` on latched viral recovery.
 
+### Multiplayer visibility
+
+| Effect | Other players nearby? | Mechanism |
+|---|---|---|
+| Body shiver (high fever / septic shock) | **Yes** | Synced `MobEffectInstance` + client `LivingEntityRendererMixin` (`FEVER_HIGH`+ or shock only) |
+| Ground particles (blood, vomit, cough, sputum, disease ambient) | **Yes** | Server `sendParticles` (~32 block range); all clients need the mod |
+| Symptom sounds | **Yes** | `level.playSound` at entity position |
+| Screen blood HUD splatters | **No** | `BleedingSplatterPacket` → affected player only |
+| Heart shake, food-bar tint, tachypnea air overlay, debug actionbar | **No** | Local client HUD / mixins |
+
 ---
 
 ## Contagion (`ContagionManager`)
@@ -410,11 +476,11 @@ Persisted `FluSeasonData`. Autumn 40% / Winter 60% season pick; 60% outbreak rol
 
 | Mod | Integration |
 |---|---|
-| **Cold Sweat** | `ColdSweatCompat` — drying, damp/wind gates, objective recovery warmth, fever/shock WORLD modifiers, waterskin/goat fur |
+| **Cold Sweat** | `ColdSweatCompat` — drying, damp/wind gates, recovery multiplier, objective recovery warmth, fever/shock WORLD modifiers, waterskin/goat fur; full fallback when absent |
 | **Serene Seasons** | `SereneSeasonsCompat` — winter RSV/noro/flu; compile stubs excluded from JAR |
-| **JEED** | Optional fever tooltip mixin |
+| **JEED** | Optional fever tooltip mixin (`require = 0`) |
 
-Never call Cold Sweat or Serene Seasons classes outside `*Compat` packages.
+Never call Cold Sweat or Serene Seasons classes outside `*Compat` packages. All optional integrations must degrade gracefully on dedicated servers and in single-player without those mods installed.
 
 ---
 
@@ -455,6 +521,9 @@ Sleep blocked at amp ≥ 2 (`message.simplediseases.pain_no_sleep`).
 | `groupImmunity` | Group → expiry tick |
 | `pendingIncubation` / `pendingIncubationId` | Committed incubation |
 | `wasInInfectedWater` | Waterborne edge-detect |
+| `accumFatigueStreak` | Continuous damp/wind re-exposure streak (ticks) |
+| `accumFatigueWarned` | 8-min warn already shown |
+| `fatigueDeficiency` | Fatigue-applied immunodeficiency flag (distinct from `/sdimmune`) |
 | `injury` | Bleeding, internal bleeding, flesh wound ticks, pain episode timer |
 
 Contagion villager exposure is in-memory only.
@@ -465,8 +534,8 @@ Contagion villager exposure is in-memory only.
 
 | Command | Permission | Description |
 |---|---|---|
-| `/sddebugviral` | Any | Viral debug overlay toggle |
-| `/sddebugbacterial` | Any | Bacterial debug overlay toggle |
+| `/sddebugviral` | Any | Viral debug overlay: diseases, wet/dry/W, `recov`, `ACCUM`, `exposure` (streak s), `drain` |
+| `/sddebugbacterial` | Any | Bacterial debug overlay: diseases, wound, `recov`, `drain` (cap-recovery only) |
 | `/sdfluseason` | Any | Force flu season ON/OFF |
 | `/sdimmune boost\|deficient\|clear` | Op | Immunity effects |
 | `/sdaccumulate <disease> <amount>` | Op | Add progress; auto-seeds complication sources |
@@ -484,7 +553,10 @@ Contagion villager exposure is in-memory only.
 - MOF → single registered effect `DiseaseEffects.MOF` (`mof`), not a tier variant map.
 - Complications → `triggeredBy` source required; progress gated on active source.
 - Symptom episodes → `SymptomService` only; add to `SymptomConfig`, not manual tick applies.
-- Compat → `ColdSweatCompat` / `SereneSeasonsCompat` exclusively.
-- Recovery suppression → build in `DiseaseEvents`, consume via `DiseaseContext.suppressRecovery`.
-- Bleeding/vomit/cough visuals → server `sendParticles` + client particle classes; HUD splatter via network packet.
+- Compat → `ColdSweatCompat` / `SereneSeasonsCompat` exclusively; always provide fallbacks when mods are absent.
+- Recovery → precompute multipliers in `DiseaseEvents`; categories consume `DiseaseContext.recoveryMultiplier(group)`.
+- Worsening rolls → `WorseningRoll.chance(worsenings)` for momentum stochastic tiers.
+- Accum fatigue → `AccumFatigueManager.tick()` after env-accum flag is known; never duplicate damp/wind detection.
+- Bleeding/vomit/cough visuals → server `sendParticles` (multiplayer-visible) + client particle classes; HUD splatter via player-only network packet.
+- Performance / multiplayer / mod compat → see **Development Principles**; do not regress them for convenience.
 - Symptom side effects with continuous behavior → custom `MobEffect` subclass (`HypotensionEffect`, `BloodyCoughingEffect`) or mixins (`PlayerMixin`, `GuiMixin`).

@@ -14,6 +14,7 @@ import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.def.SymptomAction;
 import com.theblackbaron.simplediseases.status.def.SymptomEntry;
 import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
+import com.theblackbaron.simplediseases.status.def.WorseningRoll;
 import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
 import com.theblackbaron.simplediseases.status.service.SymptomService;
 import net.minecraft.network.chat.Component;
@@ -33,8 +34,6 @@ import java.util.Set;
 public final class ViralCategory implements DiseaseCategory {
 
     public static final ResourceLocation ID = new ResourceLocation(SimpleDiseases.MOD_ID, "viral");
-    private static final float  TIER_WORSEN_BASE_CHANCE = 0.35f;
-    private static final double TIER_WORSEN_DECAY       = 0.50;
     private static final double[] THREE_TIER_CAP_2_WORSENING_THRESHOLDS  = {1.5, 2.0};
     private static final double[] THREE_TIER_CAP_10_WORSENING_THRESHOLDS = {4.0, 7.0};
     private static final double[] FOUR_TIER_CAP_10_WORSENING_THRESHOLDS  = {3.0, 6.0, 8.0};
@@ -69,10 +68,10 @@ public final class ViralCategory implements DiseaseCategory {
         SymptomPoolComponent pool     = instance.get(Components.SYMPTOMS);
         TierComponent        tier     = instance.get(Components.TIER);
 
-        // Passive recovery — unless this disease's exclusion group is suppressed this tick (for the
-        // respiratory group that already folds in "too cold to recover"; for GI, "in infected water").
-        if (!ctx.suppressRecovery(vdef.exclusionGroup())) {
-            prog.add(-vdef.recoveryRate(), vdef.progressCap());
+        // Passive recovery — scaled by warmth/fever; zero while damp/wind adds progress this tick.
+        double mult = ctx.recoveryMultiplier(vdef.exclusionGroup());
+        if (mult > 0.0) {
+            prog.add(-vdef.recoveryRate() * mult, vdef.progressCap());
         }
 
         // Roll severity once, the moment accumulation reaches the first symptom threshold — early
@@ -185,7 +184,7 @@ public final class ViralCategory implements DiseaseCategory {
                     || progress < threshold) continue;
             tier.worseningChecks |= bit;
             if (tier.severity >= maxSeverity) continue;
-            float chance = (float) (TIER_WORSEN_BASE_CHANCE * Math.pow(TIER_WORSEN_DECAY, tier.worsenings));
+            float chance = WorseningRoll.chance(tier.worsenings);
             if (player.getRandom().nextFloat() < chance) {
                 Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;

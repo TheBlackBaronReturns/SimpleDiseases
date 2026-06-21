@@ -34,6 +34,9 @@ public class PlayerDiseaseState {
     private static final String KEY_INCUBATION_ID     = "pendingIncubationId";
     private static final String KEY_WAS_WATER   = "wasInInfectedWater";
     private static final String KEY_INJURY      = "injury";
+    private static final String KEY_ACCUM_FATIGUE_STREAK = "accumFatigueStreak";
+    private static final String KEY_FATIGUE_DEFICIENCY   = "fatigueDeficiency";
+    private static final String KEY_ACCUM_FATIGUE_WARNED = "accumFatigueWarned";
 
     // Legacy (pre-component) NBT keys, for migrating existing worlds.
     private static final String L_WET = "sd_wet";
@@ -67,6 +70,17 @@ public class PlayerDiseaseState {
 
     private final Map<ResourceLocation, DiseaseInstance> diseases = new HashMap<>();
     private PlayerInjuryState injury = new PlayerInjuryState();
+
+    private long  accumFatigueStreakTicks = 0L;
+    private boolean fatigueDeficiencyActive = false;
+    private boolean accumFatigueWarned      = false;
+
+    public long  getAccumFatigueStreakTicks()  { return accumFatigueStreakTicks; }
+    public void  setAccumFatigueStreakTicks(long v) { accumFatigueStreakTicks = Math.max(0L, v); }
+    public boolean isFatigueDeficiencyActive() { return fatigueDeficiencyActive; }
+    public void  setFatigueDeficiencyActive(boolean v) { fatigueDeficiencyActive = v; }
+    public boolean isAccumFatigueWarned()    { return accumFatigueWarned; }
+    public void  setAccumFatigueWarned(boolean v) { accumFatigueWarned = v; }
 
     // --- Environment ---
 
@@ -256,6 +270,9 @@ public class PlayerDiseaseState {
         if (pendingIncubationId != null) root.putString(KEY_INCUBATION_ID, pendingIncubationId.toString());
         root.putBoolean(KEY_WAS_WATER, wasInInfectedWater);
         if (injury.hasActiveInjury()) root.put(KEY_INJURY, injury.save());
+        root.putLong(KEY_ACCUM_FATIGUE_STREAK, accumFatigueStreakTicks);
+        root.putBoolean(KEY_FATIGUE_DEFICIENCY, fatigueDeficiencyActive);
+        root.putBoolean(KEY_ACCUM_FATIGUE_WARNED, accumFatigueWarned);
     }
 
     public static PlayerDiseaseState loadFromNbt(CompoundTag root) {
@@ -286,6 +303,9 @@ public class PlayerDiseaseState {
         if (root.contains(KEY_INJURY, Tag.TAG_COMPOUND)) {
             state.injury = PlayerInjuryState.load(root.getCompound(KEY_INJURY));
         }
+        state.accumFatigueStreakTicks  = root.getLong(KEY_ACCUM_FATIGUE_STREAK);
+        state.fatigueDeficiencyActive  = root.getBoolean(KEY_FATIGUE_DEFICIENCY);
+        state.accumFatigueWarned       = root.getBoolean(KEY_ACCUM_FATIGUE_WARNED);
         return state;
     }
 
@@ -322,6 +342,9 @@ public class PlayerDiseaseState {
         c.pendingIncubationId        = pendingIncubationId;
         c.wasInInfectedWater   = wasInInfectedWater;
         c.injury = injury.copy();
+        c.accumFatigueStreakTicks  = accumFatigueStreakTicks;
+        c.fatigueDeficiencyActive  = fatigueDeficiencyActive;
+        c.accumFatigueWarned       = accumFatigueWarned;
         return c;
     }
 
@@ -334,5 +357,8 @@ public class PlayerDiseaseState {
         pendingIncubationId          = null;
         wasInInfectedWater     = false;
         injury.reset();
+        accumFatigueStreakTicks  = 0L;
+        fatigueDeficiencyActive  = false;
+        accumFatigueWarned       = false;
     }
 }

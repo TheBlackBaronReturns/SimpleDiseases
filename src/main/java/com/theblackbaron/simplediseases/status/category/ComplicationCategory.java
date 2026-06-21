@@ -18,6 +18,7 @@ import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
+import com.theblackbaron.simplediseases.status.def.WorseningRoll;
 import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
 import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
@@ -55,8 +56,6 @@ public final class ComplicationCategory implements DiseaseCategory {
 
     public static final ResourceLocation ID = new ResourceLocation(SimpleDiseases.MOD_ID, "viral_complication");
 
-    private static final float  STOCHASTIC_BASE_CHANCE = 0.30f;
-    private static final float  STOCHASTIC_MOMENTUM    = 0.25f;
     private static final double FALLBACK_RECOVERY_RATE = 0.00003;
 
     @Override public ResourceLocation id() { return ID; }
@@ -77,14 +76,13 @@ public final class ComplicationCategory implements DiseaseCategory {
         SourceComponent        src       = instance.get(Components.SOURCE);
         TierComponent          tier      = instance.get(Components.TIER);
 
-        boolean recoverySuppressed  = ctx.suppressRecovery(cdef.exclusionGroup());
         boolean worseningConditions = ctx.worsensComplication(cdef.exclusionGroup());
 
         if (!prog.inRecovery) {
             tickPreLatch(cdef, prog, pool, src, tier, player, state, gameTime, instance);
         } else {
-            tickPostLatch(cdef, prog, pool, src, tier, player, state, gameTime, instance,
-                          recoverySuppressed, worseningConditions);
+            tickPostLatch(cdef, prog, pool, src, tier, player, state, gameTime, instance, ctx,
+                          worseningConditions);
         }
     }
 
@@ -153,7 +151,8 @@ public final class ComplicationCategory implements DiseaseCategory {
     private void tickPostLatch(ComplicationDiseaseDef cdef, ProgressComponent prog, SymptomPoolComponent pool,
                                 SourceComponent src, TierComponent tier,
                                 ServerPlayer player, PlayerDiseaseState state, long gameTime,
-                                DiseaseInstance instance, boolean recoverySuppressed, boolean worseningConditions) {
+                                DiseaseInstance instance, DiseaseContext ctx,
+                                boolean worseningConditions) {
         // Defensive: latched without a roll (e.g. debug /sdaccumulate bump).
         if (!tier.rolled()) rollBiasedTier(cdef, tier, player, state, src.sourceId);
 
@@ -171,10 +170,13 @@ public final class ComplicationCategory implements DiseaseCategory {
         } else {
             if (worseningConditions) {
                 prog.add(accumRate(player, src), cdef.progressCap());
-            } else if (!recoverySuppressed) {
-                double recovRate = effectiveRecoveryRate(cdef, src);
-                prog.add(-recovRate, cdef.progressCap());
-                if (prog.progress <= 0.0) { cure(player, state, cdef, instance, gameTime); return; }
+            } else {
+                double mult = ctx.recoveryMultiplier(cdef.exclusionGroup());
+                if (mult > 0.0) {
+                    double recovRate = effectiveRecoveryRate(cdef, src);
+                    prog.add(-recovRate * mult, cdef.progressCap());
+                    if (prog.progress <= 0.0) { cure(player, state, cdef, instance, gameTime); return; }
+                }
             }
             tickStochasticWorsening(cdef, pool, src, tier, prog.progress, player);
         }
@@ -263,7 +265,7 @@ public final class ComplicationCategory implements DiseaseCategory {
                     || progress < threshold) continue;
             tier.worseningChecks |= bit;
             if (tier.severity >= maxSevOrd) continue;
-            float chance = (float) Math.min(1.0, STOCHASTIC_BASE_CHANCE + STOCHASTIC_MOMENTUM * tier.worsenings);
+            float chance = WorseningRoll.chance(tier.worsenings);
             if (player.getRandom().nextFloat() < chance) {
                 Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;

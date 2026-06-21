@@ -116,6 +116,8 @@
   "message.simplediseases.cured_mof": "Your organs stabilize.",
   "message.simplediseases.pain_no_sleep": "The pain is too intense to sleep.",
   "message.simplediseases.sore_throat_eat": "Swallowing sends a sharp pain through your throat.",
+  "message.simplediseases.accum_fatigue_warn": "Prolonged exposure while ill is weakening your immune defenses.",
+  "message.simplediseases.accum_fatigue": "Your immune system has been worn down by constant re-exposure.",
 
 "simplediseases.fever.light":  "§eMild Fever (38°C)",
 "simplediseases.fever.mild":   "§6High Fever (39°C)",

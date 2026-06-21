@@ -13,6 +13,7 @@ import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
+import com.theblackbaron.simplediseases.status.def.WorseningRoll;
 import com.theblackbaron.simplediseases.status.manager.ImmuneManager;
 import com.theblackbaron.simplediseases.status.service.SymptomService;
 import net.minecraft.network.chat.Component;
@@ -39,9 +40,7 @@ import java.util.Set;
  */
 public final class BacterialCategory implements DiseaseCategory {
 
-    private static final int    CAP_RECOVERY_BIT  = 1 << 30;
-    private static final float  WORSEN_BASE_CHANCE = 0.35f;
-    private static final double WORSEN_DECAY       = 0.50;
+    private static final int CAP_RECOVERY_BIT = 1 << 30;
 
     public static final ResourceLocation ID = new ResourceLocation(SimpleDiseases.MOD_ID, "bacterial");
 
@@ -130,8 +129,9 @@ public final class BacterialCategory implements DiseaseCategory {
         }
 
         if (inCapRecovery) {
-            if (!ctx.suppressRecovery(bdef.exclusionGroup())) {
-                prog.add(-bdef.recoveryRate(), bdef.progressCap());
+            double mult = ctx.recoveryMultiplier(bdef.exclusionGroup());
+            if (mult > 0.0) {
+                prog.add(-bdef.recoveryRate() * mult, bdef.progressCap());
             }
             if (prog.progress <= 0.0) {
                 prog.inRecovery = false;
@@ -185,7 +185,7 @@ public final class BacterialCategory implements DiseaseCategory {
                     || progress < threshold) continue;
             tier.worseningChecks |= bit;
             if (tier.severity >= maxSevOrdinal) continue;
-            float chance = (float) (WORSEN_BASE_CHANCE * Math.pow(WORSEN_DECAY, tier.worsenings));
+            float chance = WorseningRoll.chance(tier.worsenings);
             if (player.getRandom().nextFloat() < chance) {
                 Severity oldTier = Severity.byOrdinal(tier.severity);
                 tier.severity++;

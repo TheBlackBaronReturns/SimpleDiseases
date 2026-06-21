@@ -30,6 +30,8 @@ public class ColdSweatCompat {
 
     public static final boolean LOADED = ModList.get().isLoaded("cold_sweat");
 
+    public static final double SUPPRESSED_RECOVERY_MIN = 0.25;
+
     private static final ResourceLocation FILLED_WATERSKIN_ID = new ResourceLocation("cold_sweat", "filled_waterskin");
     private static final ResourceLocation[] GOAT_FUR_ARMOR_IDS = {
         new ResourceLocation("cold_sweat", "goat_fur_helmet"),
@@ -43,8 +45,11 @@ public class ColdSweatCompat {
     // World-temp bonus a carried hot waterskin adds to drying / recovery warmth calcs.
     private static final double WATERSKIN_DRY_HEAT = 1.0;
     // Minimum objective WORLD warmth for recovery (MC 0–2 scale; plains ~0.8).
+    // Viral / respiratory: higher floor — colds and flu need shelter/warmth.
     // With FEVER_LIGHT (+0.05) threshold = 0.80 — passable in plains; mild+ needs extra warmth.
-    private static final double MIN_WORLD_TEMP_TO_RECOVER = 0.75;
+    private static final double MIN_WORLD_TEMP_TO_RECOVER        = 0.75;
+    // Bacterial (cellulitis cap-recovery): lower floor — localized wound infections can heal in cold.
+    private static final double MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL = 0.60;
     // Hot armor insulation (CS units) → MC WORLD-scale recovery bonus.
     private static final double INSULATION_TO_WORLD = 0.01;
     // Fallback without CS: warmth bonus per leather or goat-fur armor piece.
@@ -191,14 +196,35 @@ public class ColdSweatCompat {
     }
 
     /**
+     * Passive recovery rate multiplier for diseases in the given exclusion group.
+     * Returns {@code 0.0} while environmental damp/wind is adding viral progress this tick.
+     */
+    public static double getRecoveryMultiplier(ServerPlayer player, String exclusionGroup,
+                                               boolean environmentalAccumulating) {
+        if (environmentalAccumulating) return 0.0;
+        double minWarmth = minRecoveryWarmth(exclusionGroup);
+        double threshold = minWarmth + feverOffset(player);
+        double warmth = getObjectiveRecoveryWarmth(player);
+        if (warmth >= threshold) return 1.0;
+        if (warmth <= minWarmth) return SUPPRESSED_RECOVERY_MIN;
+        double span = threshold - minWarmth;
+        if (span <= 0.0) return SUPPRESSED_RECOVERY_MIN;
+        double t = (warmth - minWarmth) / span;
+        return SUPPRESSED_RECOVERY_MIN + (1.0 - SUPPRESSED_RECOVERY_MIN) * t;
+    }
+
+    private static double minRecoveryWarmth(String exclusionGroup) {
+        return DiseaseRegistry.GROUP_BACTERIAL.equals(exclusionGroup)
+                ? MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL : MIN_WORLD_TEMP_TO_RECOVER;
+    }
+
+    /**
      * Whether the player is warm enough for diseases in the given exclusion group to passively recover.
-     * Viral uses full fever offset; bacterial uses {@link #BACTERIAL_FEVER_GATE_SCALE}.
+     * Viral uses {@link #MIN_WORLD_TEMP_TO_RECOVER}; bacterial uses {@link #MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL}.
+     * Both apply full fever offset on top of their respective base.
      */
     public static boolean isWarmEnoughForRecovery(ServerPlayer player, String exclusionGroup) {
-        double scale = DiseaseRegistry.GROUP_BACTERIAL.equals(exclusionGroup)
-                ? BACTERIAL_FEVER_GATE_SCALE : 1.0;
-        double threshold = MIN_WORLD_TEMP_TO_RECOVER + feverOffset(player) * scale;
-        return getObjectiveRecoveryWarmth(player) >= threshold;
+        return getRecoveryMultiplier(player, exclusionGroup, false) >= 1.0;
     }
 
     /**
@@ -266,12 +292,9 @@ public class ColdSweatCompat {
         event.register(SEPTIC_SHOCK_MODIFIER_ID, SepticShockTempModifier::new);
     }
 
-    private static final double BACTERIAL_FEVER_GATE_SCALE = 0.5;
-
     /**
-     * Whether the player is warm enough for a bacterial infection to recover. Like
-     * {@link #isWarmEnoughToRecover} but the fever offset is scaled by
-     * {@code BACTERIAL_FEVER_GATE_SCALE}.
+     * Whether the player is warm enough for a bacterial infection to recover. Uses the lower
+     * {@link #MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL} floor with full fever offset.
      */
     public static boolean isWarmEnoughForBacterialRecovery(ServerPlayer player) {
         return isWarmEnoughForRecovery(player, DiseaseRegistry.GROUP_BACTERIAL);
