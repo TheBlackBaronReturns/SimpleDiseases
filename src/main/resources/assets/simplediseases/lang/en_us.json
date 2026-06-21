@@ -119,11 +119,17 @@
   "message.simplediseases.accum_fatigue_warn": "Prolonged exposure while ill is weakening your immune defenses.",
   "message.simplediseases.accum_fatigue": "Your immune system has been worn down by constant re-exposure.",
 
-"simplediseases.fever.light":  "§eMild Fever (38°C)",
-"simplediseases.fever.mild":   "§6High Fever (39°C)",
-"simplediseases.fever.high":   "§cVery High Fever (40°C)",
-"simplediseases.fever.severe": "§4Hyperpyrexia (≥41°C)",
-"simplediseases.shock": "§dSeptic Shock (<36.0°C)",
+"simplediseases.tooltip.symptoms": "Disease Symptoms:",
+"simplediseases.condition.respiratory": "Respiratory Condition",
+"simplediseases.condition.gi": "Gastrointestinal Condition",
+"simplediseases.condition.tissue": "Tissue Condition",
+"simplediseases.condition.systemic": "Systemic Condition",
+
+"simplediseases.fever.light":  "§eMild Fever",
+"simplediseases.fever.mild":   "§6High Fever",
+"simplediseases.fever.high":   "§cVery High Fever (-5% ♥)",
+"simplediseases.fever.severe": "§4Hyperpyrexia (-15% ♥)",
+"simplediseases.shock": "§dSeptic Shock (-25% ♥)",
 
 "simplediseases.pain.0": "§6Mild Pain (I)",
 "simplediseases.pain.1": "§cSerious Pain (II)",

@@ -2,6 +2,7 @@ package com.theblackbaron.simplediseases.client.tooltip;
 
 import com.theblackbaron.simplediseases.SimpleDiseases;
 import com.theblackbaron.simplediseases.status.DiseaseEffects;
+import com.theblackbaron.simplediseases.status.def.ConditionType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -40,6 +41,10 @@ public record IconTextTooltipRenderer(IconTextTooltipComponent tooltip) implemen
         return keyStartsWith(component, "simplediseases.symptom.");
     }
 
+    public static boolean isConditionLine(Component component) {
+        return keyStartsWith(component, "simplediseases.condition.");
+    }
+
     @Nullable
     public static MobEffect symptomEffectFromLine(Component component) {
         if (!(component.getContents() instanceof TranslatableContents tc)) return null;
@@ -48,6 +53,17 @@ public record IconTextTooltipRenderer(IconTextTooltipComponent tooltip) implemen
         String path = key.substring("simplediseases.symptom.".length());
         return net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getValue(
                 ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, path));
+    }
+
+    @Nullable
+    private static ResourceLocation conditionTexture(Component component) {
+        if (!(component.getContents() instanceof TranslatableContents tc)) return null;
+        for (ConditionType type : ConditionType.values()) {
+            if (type.langKey().equals(tc.getKey())) {
+                return type.textureId();
+            }
+        }
+        return null;
     }
 
     @Nullable
@@ -65,6 +81,10 @@ public record IconTextTooltipRenderer(IconTextTooltipComponent tooltip) implemen
 
     @Nullable
     public static IconTextTooltipComponent fromLine(Component component) {
+        ResourceLocation condition = conditionTexture(component);
+        if (condition != null) {
+            return new IconTextTooltipComponent(component, condition, null);
+        }
         ResourceLocation feverOrShock = feverOrShockTexture(component);
         if (feverOrShock != null) {
             return new IconTextTooltipComponent(component, feverOrShock, null);

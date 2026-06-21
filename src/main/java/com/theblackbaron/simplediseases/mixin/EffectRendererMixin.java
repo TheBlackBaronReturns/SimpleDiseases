@@ -25,8 +25,7 @@ public abstract class EffectRendererMixin {
         MobEffect effect = instance.getEffect();
         if (!(effect instanceof DiseaseMobEffect)) return;
 
-        List<Component> rows = DiseaseTooltipHelper.buildWhenAppliedRows(
-                instance, Minecraft.getInstance().player);
-        DiseaseTooltipHelper.insertWhenAppliedRows(cir.getReturnValue(), rows);
+        DiseaseTooltipHelper.applyDiseaseTooltip(
+                cir.getReturnValue(), instance, Minecraft.getInstance().player);
     }
 }

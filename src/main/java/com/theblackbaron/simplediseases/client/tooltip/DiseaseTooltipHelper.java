@@ -9,6 +9,7 @@ import com.theblackbaron.simplediseases.status.component.DiseaseInstance;
 import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
+import com.theblackbaron.simplediseases.status.def.ConditionType;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
@@ -18,6 +19,7 @@ import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -29,20 +31,34 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Builds "When Applied" tooltip rows for disease tier effects from synced player disease state. */
+/** Builds custom disease tooltip rows from synced player disease state. */
 public final class DiseaseTooltipHelper {
+    private static final Component SYMPTOMS_HEADER =
+            Component.translatable("simplediseases.tooltip.symptoms").withStyle(ChatFormatting.GRAY);
+
     private DiseaseTooltipHelper() {}
 
-    /**
-     * Rows to insert directly under the {@code potion.whenDrank} header: fever or shock, pain, then
-     * active pool symptoms.
-     */
-    public static List<Component> buildWhenAppliedRows(MobEffectInstance instance, @Nullable Player player) {
+    /** Post-processes a JEED effect tooltip list for disease tier effects. */
+    public static void applyDiseaseTooltip(List<Component> list, MobEffectInstance instance, @Nullable Player player) {
+        MobEffect effect = instance.getEffect();
+        if (!(effect instanceof DiseaseMobEffect) || !isDiseaseTierEffect(effect)) return;
+
+        removeHiddenAttributeBlock(list);
+        insertConditionRow(list, effect);
+        applySymptomsSection(list, buildSymptomRows(instance, player));
+        stripTrailingBlankLines(list);
+    }
+
+    public static boolean isDiseaseTierEffect(MobEffect effect) {
+        return diseaseIdForEffect(effect).isPresent();
+    }
+
+    /** Symptom rows under the Symptoms header: fever or shock, pain, then active pool symptoms. */
+    public static List<Component> buildSymptomRows(MobEffectInstance instance, @Nullable Player player) {
         List<Component> rows = new ArrayList<>();
         MobEffect effect = instance.getEffect();
         if (!(effect instanceof DiseaseMobEffect dme)) return rows;
 
-        // Fever or septic shock — mutually exclusive top row
         if (dme.getShockOffset() > 0.0) {
             rows.add(Component.translatable("simplediseases.shock"));
         } else if (DiseaseEffects.shouldShowFeverTooltip(player, dme)) {
@@ -85,6 +101,110 @@ public final class DiseaseTooltipHelper {
         }
 
         return rows;
+    }
+
+    private static void insertConditionRow(List<Component> list, MobEffect effect) {
+        if (list.isEmpty()) return;
+        Optional<ResourceLocation> diseaseId = diseaseIdForEffect(effect);
+        if (diseaseId.isEmpty()) return;
+        Optional<ConditionType> condition = ConditionType.forDisease(diseaseId.get());
+        if (condition.isEmpty()) return;
+        list.add(1, Component.translatable(condition.get().langKey()).withStyle(ChatFormatting.YELLOW));
+    }
+
+    /**
+     * Removes JEED's hidden max-health attribute block: the blank spacer, {@code potion.whenDrank},
+     * and all attribute modifier lines. Tier diseases only register fever/shock max-health modifiers.
+     */
+    private static void removeHiddenAttributeBlock(List<Component> list) {
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i).getContents() instanceof TranslatableContents tc)) continue;
+            if (!"potion.whenDrank".equals(tc.getKey())) continue;
+
+            if (i > 0 && isBlankTooltipLine(list.get(i - 1))) {
+                list.remove(i - 1);
+                i--;
+            }
+
+            list.remove(i);
+
+            while (i < list.size() && isAttributeModifierLine(list.get(i))) {
+                list.remove(i);
+            }
+            return;
+        }
+
+        list.removeIf(DiseaseTooltipHelper::isAttributeModifierLine);
+    }
+
+    private static void stripTrailingBlankLines(List<Component> list) {
+        while (!list.isEmpty() && isBlankTooltipLine(list.get(list.size() - 1))) {
+            list.remove(list.size() - 1);
+        }
+    }
+
+    private static boolean isBlankTooltipLine(Component line) {
+        return line.getString().isBlank();
+    }
+
+    private static void applySymptomsSection(List<Component> list, List<Component> rows) {
+        if (rows.isEmpty()) return;
+
+        int insertAt = indexOfWhenAppliedHeader(list);
+        if (insertAt >= 0) {
+            list.remove(insertAt);
+        } else {
+            insertAt = symptomsInsertIndex(list);
+        }
+
+        if (insertAt > 0 && isBlankTooltipLine(list.get(insertAt - 1))) {
+            list.add(insertAt, SYMPTOMS_HEADER);
+            insertRows(list, insertAt + 1, rows);
+        } else {
+            list.add(insertAt, Component.empty());
+            list.add(insertAt + 1, SYMPTOMS_HEADER);
+            insertRows(list, insertAt + 2, rows);
+        }
+    }
+
+    private static void insertRows(List<Component> list, int index, List<Component> rows) {
+        for (int i = 0; i < rows.size(); i++) {
+            list.add(index + i, rows.get(i));
+        }
+    }
+
+    private static int indexOfWhenAppliedHeader(List<Component> list) {
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getContents() instanceof TranslatableContents tc
+                    && "potion.whenDrank".equals(tc.getKey())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int symptomsInsertIndex(List<Component> list) {
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getContents() instanceof TranslatableContents tc
+                    && tc.getKey().startsWith("attribute.modifier.")) {
+                return i;
+            }
+        }
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getContents() instanceof TranslatableContents tc) {
+                String key = tc.getKey();
+                if ("jeed.tooltip.harmful".equals(key) || "jeed.tooltip.beneficial".equals(key)
+                        || "jeed.tooltip.neutral".equals(key)) {
+                    return i + 1;
+                }
+            }
+        }
+        return list.size();
+    }
+
+    private static boolean isAttributeModifierLine(Component line) {
+        return line.getContents() instanceof TranslatableContents tc
+                && tc.getKey().startsWith("attribute.modifier.");
     }
 
     private static Component feverLine(double feverOffset) {
@@ -137,39 +257,5 @@ public final class DiseaseTooltipHelper {
             }
         }
         return Optional.empty();
-    }
-
-    /** Inserts {@code rows} under the "When Applied" section of a JEED effect tooltip list. */
-    public static void insertWhenAppliedRows(List<Component> list, List<Component> rows) {
-        if (rows.isEmpty()) return;
-        int insertAt = whenAppliedInsertIndex(list);
-        for (Component row : rows) {
-            list.add(insertAt++, row);
-        }
-    }
-
-    private static int whenAppliedInsertIndex(List<Component> list) {
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents tc
-                    && "potion.whenDrank".equals(tc.getKey())) {
-                return i + 1;
-            }
-        }
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents tc
-                    && tc.getKey().startsWith("attribute.modifier.")) {
-                return i;
-            }
-        }
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents tc) {
-                String key = tc.getKey();
-                if ("jeed.tooltip.harmful".equals(key) || "jeed.tooltip.beneficial".equals(key)
-                        || "jeed.tooltip.neutral".equals(key)) {
-                    return i + 1;
-                }
-            }
-        }
-        return list.size();
     }
 }
