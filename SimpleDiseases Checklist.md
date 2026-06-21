@@ -44,107 +44,55 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
-Change the fever system: currently players can exploit by staying in a cold biome wiyh a very light cold that never gets cured
+~~Change the fever system: currently players can exploit by staying in a cold biome wiyh a very light cold that never gets cured~~
 
 Septic should be a unique disease wherein inheritance only symptoms should serve as an additional fourth symptom representing the continuation of the source disease
 
-
-
 Adding tooltips/icons for each symptom on the disease mob effect itself
 
-
-
-Sepsis should not replace the static symptoms of its source disease
-
-
+~~Sepsis should not replace the static symptoms of its source disease~~
 
 On-player visible wounds/infections possibility
 
+~~Refactor sharp pain to be just pain, and mof to be just mof~~
 
-
-Refactor sharp pain to be just pain, and mof to be just mof
-
-
-
-Fever should not raise world temp
-
-
+~~Fever should not raise world temp~~
 
 ~~Sore throat should cause damage when eating~~
 
-
-
 Flu should lock-in like norovirus
-
-
 
 ~~Some symptoms should be static: exist on the player for the entire duration of the disease rather than episodic~~
 
-
-
-Zombie caused flesh wounds should have a 60% chance of seeding a gas gangrene bacterial infection
-
-
-
 Organ failure complications should have a unique tooltip and cause dying hearts to be grey
-
-
 
 Give all of the disease/injury related deaths proper death messages
 
-
-
 Sleeping should provide symptom management effect for gating spam
-
-
 
 Pigs/chickens should possibly (5% chance) get influenza per flu season
 
-
-
 Disable norovirus in oceans
-
-
 
 When treatment is successful it should only stop the episodes of the disease it was successfully applied to
 
-
-
 ~~Fever temperature gating is too high (current mild fever effect should be equivalent to severe fever).~~
-
-
 
 ~~Stomach cramp should stop healing from hunger~~
 
-
-
 ~~Unify post-disease viral immunity~~
-
-
 
 ~~If a player is damp yet temp is above 1.0 can the player still get sick~~
 
-
-
 ~~Make debilitating influenza cause shivering~~
-
-
 
 ~~Make the particles bigger~~
 
-
-
 ~~Drying rate should also connect to body temp~~
-
-
 
 ~~Maybe change the way reservoirs work to rather than only accumulating norovirus, whenever a player enters into infected reservoir it should randomly pick a number between 0.5 and 1.0 (inclusive), added onto the current norovirus accumulation and start adding onto it that amount gradually (in the same rate as if you are wading over infected reservoir water). What would the implications of this be? Just talk theory don't implement anything for now~~
 
-
-
 ~~When a cure is consumed while a complication is developing it should affect the source disease only first. But once the complication becomes a full disease (latches), cures should directly reduce it (as the source disease basically is absorbed by it)~~
-
-
 
 ~~Complications like pneumonia should take all the accumulation of its source disease at the moment of latching~~
 
