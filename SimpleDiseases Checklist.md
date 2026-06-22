@@ -44,13 +44,17 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
+Give disease mob effects special colors and re-arrange mob effect priority on the player HUD
+
+Complication accumulation should not cease symptoms of the source disease
+
 Seperate disease exclusion into body parts *and* pathogen type rather than just grouped by pathogen type as it is now
 
 ~~Change the fever system: currently players can exploit by staying in a cold biome wiyh a very light cold that never gets cured~~
 
 Septic should be a unique disease wherein inheritance only symptoms should serve as an additional fourth symptom representing the continuation of the source disease
 
-Adding tooltips/icons for each symptom on the disease mob effect itself
+~~Adding tooltips/icons for each symptom on the disease mob effect itself~~
 
 ~~Sepsis should not replace the static symptoms of its source disease~~
 
@@ -62,7 +66,7 @@ On-player visible wounds/infections possibility
 
 ~~Sore throat should cause damage when eating~~
 
-Flu should lock-in like norovirus
+~~Flu should lock-in like norovirus~~
 
 ~~Some symptoms should be static: exist on the player for the entire duration of the disease rather than episodic~~
 
