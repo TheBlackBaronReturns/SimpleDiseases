@@ -44,6 +44,8 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
+Increase chance of first severity worsening for bacterial diseases to 55%
+
 Give disease mob effects special colors and re-arrange mob effect priority on the player HUD
 
 Complication accumulation should not cease symptoms of the source disease
