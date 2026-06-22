@@ -104,7 +104,7 @@ public final class DiseaseRegistry {
                             () -> DiseaseSounds.HEARTBEAT.get(), SymptomBand.ADVANCED)
                 ),
                 20 * 60, 20 * 180, 20 * 45, 20 * 90,
-                PersistentEffects.malaiseOnly()
+                PersistentEffects.withPain(PainProfile.MILD_FLAT)
             ),
             new ViralContagion(6.0, 0.334f, 0.10, 20, 0.20f, 0.70f, 0.80f, 24000, 24000, 0.0f, 0.0f, true, true),
             new AcquisitionRule(false, true, false, 0.6, 0.0),
@@ -185,7 +185,7 @@ public final class DiseaseRegistry {
                     new SymptomEntry(DiseaseEffects.CONFUSION, SymptomAction.NONE, SymptomBand.ADVANCED)
                 ),
                 20 * 30, 20 * 90, 20 * 30, 20 * 60,
-                PersistentEffects.withPain(1)
+                PersistentEffects.withPain(PainProfile.PNEUMONIA)
             ),
             "message.simplediseases.caught_pneumonia", "message.simplediseases.cured_pneumonia",
             // Viral gate, stochastic momentum worsening
@@ -220,7 +220,7 @@ public final class DiseaseRegistry {
                             () -> DiseaseSounds.RAPID_BREATHING.get(), SymptomBand.ADVANCED)
                 ),
                 20 * 30, 20 * 90, 20 * 30, 20 * 60,
-                PersistentEffects.withPain(0)
+                PersistentEffects.withPain(PainProfile.MILD_FLAT)
             ),
             "message.simplediseases.caught_bronchitis", "message.simplediseases.cured_bronchitis",
             // Viral gate, stochastic momentum worsening
@@ -251,7 +251,7 @@ public final class DiseaseRegistry {
                     new SymptomEntry(DiseaseEffects.CONFUSION, SymptomAction.NONE, SymptomBand.ADVANCED)
                 ),
                 20 * 60, 20 * 180, 20 * 30, 20 * 90,
-                PersistentEffects.withPain(1)
+                PersistentEffects.withPain(PainProfile.CELLULITIS)
             ),
             "message.simplediseases.caught_cellulitis",
             "message.simplediseases.cured_cellulitis",
@@ -283,7 +283,7 @@ public final class DiseaseRegistry {
                 ),
                 List.of(new SymptomSupersedes(DiseaseEffects.LOCALIZED_REDNESS, DiseaseEffects.MOTTLED_SKIN)),
                 20 * 90, 20 * 240, 20 * 45, 20 * 120,
-                PersistentEffects.withPain(2)
+                PersistentEffects.withPain(PainProfile.SEPSIS)
             ),
             "message.simplediseases.caught_sepsis",
             "message.simplediseases.cured_sepsis",

@@ -4,25 +4,26 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 
 /** Infinite malaise and/or Pain applied while a disease is latched — not in the symptom pool. */
-public record PersistentEffects(boolean malaise, OptionalInt painAmplifier) {
+public record PersistentEffects(boolean malaise, Optional<PainProfile> painProfile) {
 
-    public static final PersistentEffects NONE = new PersistentEffects(false, OptionalInt.empty());
+    public static final PersistentEffects NONE = new PersistentEffects(false, Optional.empty());
 
     public static PersistentEffects malaiseOnly() {
-        return new PersistentEffects(true, OptionalInt.empty());
+        return new PersistentEffects(true, Optional.empty());
     }
 
-    public static PersistentEffects withPain(int amplifier) {
-        return new PersistentEffects(true, OptionalInt.of(amplifier));
+    public static PersistentEffects withPain(PainProfile profile) {
+        return new PersistentEffects(true, Optional.of(profile));
+    }
+
+    public boolean hasPain() {
+        return painProfile.isPresent();
     }
 
     public static final Codec<PersistentEffects> CODEC = RecordCodecBuilder.create(i -> i.group(
         Codec.BOOL.optionalFieldOf("malaise", false).forGetter(PersistentEffects::malaise),
-        Codec.INT.optionalFieldOf("pain_amplifier").forGetter(p ->
-                p.painAmplifier().isPresent() ? Optional.of(p.painAmplifier().getAsInt()) : Optional.empty())
-    ).apply(i, (malaise, pain) -> new PersistentEffects(malaise,
-            pain.map(OptionalInt::of).orElse(OptionalInt.empty()))));
+        PainProfile.CODEC.optionalFieldOf("pain_profile").forGetter(PersistentEffects::painProfile)
+    ).apply(i, PersistentEffects::new));
 }

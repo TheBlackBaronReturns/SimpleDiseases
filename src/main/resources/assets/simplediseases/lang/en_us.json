@@ -120,9 +120,9 @@
   "message.simplediseases.accum_fatigue": "Your immune system has been worn down by constant re-exposure.",
 
 "simplediseases.tooltip.symptoms": "Disease Symptoms:",
-"simplediseases.condition.respiratory": "Respiratory Condition",
-"simplediseases.condition.gi": "Gastrointestinal Condition",
-"simplediseases.condition.tissue": "Tissue Condition",
+"simplediseases.condition.respiratory": "Respiratory Infection",
+"simplediseases.condition.gi": "Gastrointestinal Infection",
+"simplediseases.condition.tissue": "Tissue Infection",
 "simplediseases.condition.systemic": "Systemic Condition",
 
 "simplediseases.fever.light":  "§eMild Fever",
@@ -131,9 +131,11 @@
 "simplediseases.fever.severe": "§4Hyperpyrexia (-15% ♥)",
 "simplediseases.shock": "§dSeptic Shock (-25% ♥)",
 
-"simplediseases.pain.0": "§6Mild Pain (I)",
-"simplediseases.pain.1": "§cSerious Pain (II)",
-"simplediseases.pain.2": "§4Excruciating Pain (III)",
+"simplediseases.pain.0": "§fMild Pain (I)",
+"simplediseases.pain.1": "§eAcute Pain (II)",
+"simplediseases.pain.2": "§6Intense Pain (III)",
+"simplediseases.pain.3": "§cSevere Pain (IV)",
+"simplediseases.pain.4": "§4Excruciating Pain (V)",
 
 "simplediseases.symptom.cough": "Cough",
 "simplediseases.symptom.sneezing": "Runny Nose",

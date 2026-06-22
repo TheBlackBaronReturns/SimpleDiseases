@@ -98,12 +98,12 @@ public class SymptomEvents {
     }
 
     /**
-     * Pain tier 3 (amplifier >= 2) blocks sleep.
+     * Severe Pain (amplifier >= 3) and Excruciating Pain block sleep.
      */
     @SubscribeEvent
     public void onSleepAttempt(PlayerSleepInBedEvent event) {
         MobEffectInstance pain = event.getEntity().getEffect(DiseaseEffects.PAIN.get());
-        if (pain == null || pain.getAmplifier() < 2) return;
+        if (pain == null || pain.getAmplifier() < 3) return;
         event.setResult(Player.BedSleepingProblem.OTHER_PROBLEM);
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             serverPlayer.displayClientMessage(

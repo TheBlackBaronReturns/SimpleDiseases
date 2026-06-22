@@ -43,6 +43,7 @@ public final class DiseaseTooltipHelper {
         MobEffect effect = instance.getEffect();
         if (!(effect instanceof DiseaseMobEffect) || !isDiseaseTierEffect(effect)) return;
 
+        stripJeedMetadataLines(list);
         removeHiddenAttributeBlock(list);
         insertConditionRow(list, effect);
         applySymptomsSection(list, buildSymptomRows(instance, player));
@@ -109,7 +110,21 @@ public final class DiseaseTooltipHelper {
         if (diseaseId.isEmpty()) return;
         Optional<ConditionType> condition = ConditionType.forDisease(diseaseId.get());
         if (condition.isEmpty()) return;
-        list.add(1, Component.translatable(condition.get().langKey()).withStyle(ChatFormatting.YELLOW));
+        list.add(1, Component.translatable(condition.get().langKey()).withStyle(ChatFormatting.GRAY));
+    }
+
+    /** Removes JEED effect-color and category rows (harmful / beneficial / neutral). */
+    private static void stripJeedMetadataLines(List<Component> list) {
+        list.removeIf(line -> {
+            if (!(line.getContents() instanceof TranslatableContents tc)) return false;
+            return switch (tc.getKey()) {
+                case "jeed.tooltip.color_complete",
+                     "jeed.tooltip.harmful",
+                     "jeed.tooltip.beneficial",
+                     "jeed.tooltip.neutral" -> true;
+                default -> false;
+            };
+        });
     }
 
     /**
@@ -190,15 +205,6 @@ public final class DiseaseTooltipHelper {
                 return i;
             }
         }
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).getContents() instanceof TranslatableContents tc) {
-                String key = tc.getKey();
-                if ("jeed.tooltip.harmful".equals(key) || "jeed.tooltip.beneficial".equals(key)
-                        || "jeed.tooltip.neutral".equals(key)) {
-                    return i + 1;
-                }
-            }
-        }
         return list.size();
     }
 
@@ -219,9 +225,9 @@ public final class DiseaseTooltipHelper {
         DiseaseDef def = DiseaseRegistry.get(diseaseId);
         if (def == null) return -1;
         SymptomConfig symptoms = symptomsOf(def);
-        if (symptoms == null || symptoms.persistentEffects().painAmplifier().isEmpty()) return -1;
+        if (symptoms == null || symptoms.persistentEffects().painProfile().isEmpty()) return -1;
         if (!state.inRecovery(diseaseId)) return -1;
-        return symptoms.persistentEffects().painAmplifier().getAsInt();
+        return symptoms.persistentEffects().painProfile().get().amplifierFor(state.tierOf(diseaseId));
     }
 
     @Nullable

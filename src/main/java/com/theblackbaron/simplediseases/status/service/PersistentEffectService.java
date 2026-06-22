@@ -9,6 +9,7 @@ import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
+import com.theblackbaron.simplediseases.status.def.PainProfile;
 import com.theblackbaron.simplediseases.status.def.Severity;
 import com.theblackbaron.simplediseases.status.def.ViralDiseaseDef;
 import com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState;
@@ -55,7 +56,7 @@ public final class PersistentEffectService {
     private static void syncPain(ServerPlayer player, PlayerDiseaseState state) {
         int bestAmp = -1;
         if (state.injury().fleshWoundSeverity() >= 0 && !state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)) {
-            bestAmp = Math.max(bestAmp, 0);
+            bestAmp = Math.max(bestAmp, 1);
         }
         for (DiseaseInstance inst : state.instances()) {
             DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
@@ -63,8 +64,9 @@ public final class PersistentEffectService {
             ProgressComponent prog = inst.get(Components.PROGRESS);
             if (prog == null || !prog.inRecovery) continue;
             var symptoms = symptomsOf(def);
-            if (symptoms == null || symptoms.persistentEffects().painAmplifier().isEmpty()) continue;
-            bestAmp = Math.max(bestAmp, symptoms.persistentEffects().painAmplifier().getAsInt());
+            if (symptoms == null || symptoms.persistentEffects().painProfile().isEmpty()) continue;
+            PainProfile profile = symptoms.persistentEffects().painProfile().get();
+            bestAmp = Math.max(bestAmp, profile.amplifierFor(state.tierOf(inst.diseaseId())));
         }
         if (bestAmp < 0) {
             player.removeEffect(DiseaseEffects.PAIN.get());

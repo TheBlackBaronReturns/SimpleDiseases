@@ -297,8 +297,9 @@ public class DiseaseEffects {
             ProgressComponent prog = inst.get(Components.PROGRESS);
             if (prog == null || !prog.inRecovery) continue;
             SymptomConfig symptoms = symptomsOf(def);
-            if (symptoms == null || symptoms.persistentEffects().painAmplifier().isEmpty()) continue;
-            int amp = symptoms.persistentEffects().painAmplifier().getAsInt();
+            if (symptoms == null || symptoms.persistentEffects().painProfile().isEmpty()) continue;
+            int amp = symptoms.persistentEffects().painProfile().get()
+                    .amplifierFor(state.tierOf(inst.diseaseId()));
             if (amp > maxAmp) {
                 maxAmp = amp;
                 winner = inst.diseaseId();
