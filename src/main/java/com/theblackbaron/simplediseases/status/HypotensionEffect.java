@@ -1,7 +1,6 @@
 package com.theblackbaron.simplediseases.status;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -10,12 +9,12 @@ import net.minecraft.world.entity.LivingEntity;
 /**
  * Hypotension episode marker; every 30 s while active applies 10 s of hidden blindness + Slowness IV.
  */
-public class HypotensionEffect extends MobEffect {
+public class HypotensionEffect extends SortedMobEffect {
     public static final int PULSE_INTERVAL_TICKS = 20 * 30;
     public static final int IMPACT_TICKS         = 200;
 
     public HypotensionEffect() {
-        super(MobEffectCategory.NEUTRAL, 0x7090B0);
+        super(MobEffectCategory.NEUTRAL, 0x7090B0, EffectHudSort.SYMPTOM_HYPOTENSION);
     }
 
     @Override

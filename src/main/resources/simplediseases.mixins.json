@@ -2,6 +2,7 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.theblackbaron.simplediseases.mixin",
+  "plugin": "com.theblackbaron.simplediseases.mixin.SimpleDiseasesMixinPlugin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "simplediseases.refmap.json",
   "mixins": [
@@ -13,8 +14,7 @@
     "LivingEntityRendererMixin",
     "MobEffectTextureManagerMixin",
     "TextureAtlasHolderInvoker",
-    "GuiMixin",
-    "ForgeGuiMixin"
+    "GuiMixin"
   ],
   "injectors": {
     "defaultRequire": 1

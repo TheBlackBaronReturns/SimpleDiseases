@@ -1,7 +1,6 @@
 package com.theblackbaron.simplediseases.status;
 
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -13,9 +12,9 @@ import java.util.UUID;
 /**
  * MobEffect subclass that adds a chainable modifier() helper for building per-tier disease effects.
  * Tier variants share one icon per disease path (simplediseases:textures/mob_effect/&lt;diseasePath&gt;.png);
- * the client remaps sprite lookup via {@link #sharedIconId}.
+ * the client remaps sprite lookup via {@link #sharedIconId} and {@link com.theblackbaron.simplediseases.mixin.MobEffectTextureManagerMixin}.
  */
-public class DiseaseMobEffect extends MobEffect {
+public class DiseaseMobEffect extends SortedMobEffect {
 
     /** MC WORLD-scale units added to the recovery threshold and perceived ambient warmth for each fever level. */
     public static final double FEVER_LIGHT  = 0.05;
@@ -54,8 +53,8 @@ public class DiseaseMobEffect extends MobEffect {
     // LinkedHashMap preserves insertion order so JEED renders modifiers in the order modifier() is called.
     private final LinkedHashMap<Attribute, AttributeModifier> orderedModifiers = new LinkedHashMap<>();
 
-    public DiseaseMobEffect(MobEffectCategory category, int color) {
-        super(category, color);
+    public DiseaseMobEffect(MobEffectCategory category, int color, int hudSortOrder) {
+        super(category, color, hudSortOrder);
     }
 
     @Override

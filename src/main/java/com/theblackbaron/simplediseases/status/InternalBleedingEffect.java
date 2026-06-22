@@ -1,14 +1,13 @@
 package com.theblackbaron.simplediseases.status;
 
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.LivingEntity;
 
-public class InternalBleedingEffect extends MobEffect {
+public class InternalBleedingEffect extends SortedMobEffect {
     private static final float DAMAGE_PER_HIT = 0.75F;
 
     public InternalBleedingEffect() {
-        super(MobEffectCategory.HARMFUL, 0x4A0020);
+        super(MobEffectCategory.HARMFUL, 0x4A0020, EffectHudSort.SD_INTERNAL_BLEEDING);
     }
 
     @Override

@@ -3,7 +3,6 @@ package com.theblackbaron.simplediseases.status;
 import com.theblackbaron.simplediseases.SimpleDiseases;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -11,13 +10,13 @@ import net.minecraft.world.entity.LivingEntity;
  * Visible Bloody Coughing marker for a full episode; magic damage ticks only during an NBT-stored
  * damage window started when the symptom episode fires.
  */
-public class BloodyCoughingEffect extends MobEffect {
+public class BloodyCoughingEffect extends SortedMobEffect {
     private static final String KEY_DAMAGE_UNTIL = "bloody_cough_damage_until";
     private static final float  DAMAGE_PER_HIT   = 2.0F;
     private static final int    INTERVAL_TICKS   = 20;
 
     public BloodyCoughingEffect() {
-        super(MobEffectCategory.NEUTRAL, 0x8B3A3A);
+        super(MobEffectCategory.NEUTRAL, 0x8B3A3A, EffectHudSort.SYMPTOM_BLOODY_COUGHING);
     }
 
     public static void beginDamageWindow(ServerPlayer player, long gameTimeUntil) {

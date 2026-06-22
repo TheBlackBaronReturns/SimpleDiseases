@@ -2,15 +2,14 @@ package com.theblackbaron.simplediseases.status;
 
 import com.theblackbaron.simplediseases.network.NetworkHandler;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.LivingEntity;
 
-public class BleedingEffect extends MobEffect {
+public class BleedingEffect extends SortedMobEffect {
     private static final float DAMAGE_PER_HIT = 0.5F;
 
     public BleedingEffect() {
-        super(MobEffectCategory.HARMFUL, 0x8C1000);
+        super(MobEffectCategory.HARMFUL, 0x8C1000, EffectHudSort.SD_BLEEDING);
     }
 
     @Override

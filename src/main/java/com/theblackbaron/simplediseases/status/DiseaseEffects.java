@@ -128,7 +128,8 @@ public class DiseaseEffects {
             double feverOffset = feverOffsets.getOrDefault(sev, 0.0);
             double shockOffset = shockOffsets.getOrDefault(sev, 0.0);
             RegistryObject<MobEffect> variant = EFFECTS.register(regName, () -> {
-                DiseaseMobEffect effect = new DiseaseMobEffect(MobEffectCategory.HARMFUL, color)
+                DiseaseMobEffect effect = new DiseaseMobEffect(MobEffectCategory.HARMFUL, color,
+                        EffectHudSort.diseaseForPath(path))
                         .sharedIcon(ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, path));
                 applyFeverShockModifiers(effect, regName, feverOffset, shockOffset);
                 return effect;
@@ -451,66 +452,66 @@ public class DiseaseEffects {
             EFFECTS.register("damp", DampEffect::new);
 
     public static final RegistryObject<MobEffect> CHILLY_WIND =
-            EFFECTS.register("chilly_wind", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x9DBEE0) {});
+            EFFECTS.register("chilly_wind", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x9DBEE0, EffectHudSort.SD_CHILLY_WIND));
 
     public static final RegistryObject<MobEffect> COUGH =
-            EFFECTS.register("cough", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xA0522D) {});
+            EFFECTS.register("cough", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xA0522D, EffectHudSort.SYMPTOM_COUGH));
 
     public static final RegistryObject<MobEffect> SNEEZING =
-            EFFECTS.register("sneezing", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xF5DEB3) {});
+            EFFECTS.register("sneezing", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xF5DEB3, EffectHudSort.SYMPTOM_SNEEZING));
 
     public static final RegistryObject<MobEffect> MALAISE =
-            EFFECTS.register("malaise", () -> new DiseaseMobEffect(MobEffectCategory.NEUTRAL, 0x6E6B7A)
+            EFFECTS.register("malaise", () -> new DiseaseMobEffect(MobEffectCategory.NEUTRAL, 0x6E6B7A, EffectHudSort.SYMPTOM_MALAISE)
                     .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("malaise:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.05, AttributeModifier.Operation.MULTIPLY_TOTAL)
                     .modifier(DiseaseAttributes.JUMP_FACTOR.get(),      UUID.nameUUIDFromBytes("malaise:jump_factor".getBytes(StandardCharsets.UTF_8)),       DiseaseMobEffect.MALAISE_JUMP_DEBUFF, AttributeModifier.Operation.MULTIPLY_TOTAL));
 
     public static final RegistryObject<MobEffect> VOMITING =
-            EFFECTS.register("vomiting", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x6B8E23) {});
+            EFFECTS.register("vomiting", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x6B8E23, EffectHudSort.SYMPTOM_VOMITING));
 
     public static final RegistryObject<MobEffect> SHORTNESS_OF_BREATH =
-            EFFECTS.register("shortness_of_breath", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x7FA8C9) {});
+            EFFECTS.register("shortness_of_breath", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x7FA8C9, EffectHudSort.SYMPTOM_SHORTNESS_OF_BREATH));
 
     public static final RegistryObject<MobEffect> HYPOTENSION =
             EFFECTS.register("hypotension", HypotensionEffect::new);
 
     public static final RegistryObject<MobEffect> HEADACHE =
-            EFFECTS.register("headache", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x9B4B4B) {});
+            EFFECTS.register("headache", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x9B4B4B, EffectHudSort.SYMPTOM_HEADACHE));
 
     public static final RegistryObject<MobEffect> SORE_THROAT =
-            EFFECTS.register("sore_throat", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xC76B5A) {});
+            EFFECTS.register("sore_throat", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xC76B5A, EffectHudSort.SYMPTOM_SORE_THROAT));
 
     public static final RegistryObject<MobEffect> STOMACH_CRAMPS =
-            EFFECTS.register("stomach_cramps", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x7A5C3E) {});
+            EFFECTS.register("stomach_cramps", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x7A5C3E, EffectHudSort.SYMPTOM_STOMACH_CRAMPS));
 
     public static final RegistryObject<MobEffect> DIARRHEA =
-            EFFECTS.register("diarrhea", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x6E4B1F) {});
+            EFFECTS.register("diarrhea", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x6E4B1F, EffectHudSort.SYMPTOM_DIARRHEA));
 
     public static final RegistryObject<MobEffect> MOTTLED_SKIN =
-            EFFECTS.register("mottled_skin", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x9966AA) {});
+            EFFECTS.register("mottled_skin", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x9966AA, EffectHudSort.SYMPTOM_MOTTLED_SKIN));
 
     public static final RegistryObject<MobEffect> BLOODY_COUGHING =
             EFFECTS.register("bloody_coughing", BloodyCoughingEffect::new);
 
     public static final RegistryObject<MobEffect> TACHYCARDIA =
-            EFFECTS.register("tachycardia", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xCC3333) {});
+            EFFECTS.register("tachycardia", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xCC3333, EffectHudSort.SYMPTOM_TACHYCARDIA));
 
     public static final RegistryObject<MobEffect> TACHYPNEA =
-            EFFECTS.register("tachypnea", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x6699CC) {});
+            EFFECTS.register("tachypnea", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x6699CC, EffectHudSort.SYMPTOM_TACHYPNEA));
 
     public static final RegistryObject<MobEffect> WHEEZING =
-            EFFECTS.register("wheezing", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x88AACC) {});
+            EFFECTS.register("wheezing", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x88AACC, EffectHudSort.SYMPTOM_WHEEZING));
 
     public static final RegistryObject<MobEffect> CONFUSION =
-            EFFECTS.register("confusion", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0x998877) {});
+            EFFECTS.register("confusion", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0x998877, EffectHudSort.SYMPTOM_CONFUSION));
 
     public static final RegistryObject<MobEffect> PRODUCTIVE_COUGHING =
-            EFFECTS.register("productive_coughing", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xA0522D) {});
+            EFFECTS.register("productive_coughing", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xA0522D, EffectHudSort.SYMPTOM_PRODUCTIVE_COUGHING));
 
     public static final RegistryObject<MobEffect> BLEEDING =
             EFFECTS.register("bleeding", BleedingEffect::new);
 
     public static final RegistryObject<MobEffect> FLESH_WOUND =
-            EFFECTS.register("flesh_wound", () -> new MobEffect(MobEffectCategory.HARMFUL, 0x7A1B14) {});
+            EFFECTS.register("flesh_wound", () -> new SortedMobEffect(MobEffectCategory.HARMFUL, 0x7A1B14, EffectHudSort.DISEASE_FLESH_WOUND));
 
     public static final RegistryObject<MobEffect> INTERNAL_BLEEDING =
             EFFECTS.register("internal_bleeding", InternalBleedingEffect::new);
@@ -519,14 +520,14 @@ public class DiseaseEffects {
             EFFECTS.register("blood_loss", BloodLossEffect::new);
 
     public static final RegistryObject<MobEffect> LOCALIZED_REDNESS =
-            EFFECTS.register("localized_redness", () -> new MobEffect(MobEffectCategory.NEUTRAL, 0xCC4422) {});
+            EFFECTS.register("localized_redness", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xCC4422, EffectHudSort.SYMPTOM_LOCALIZED_REDNESS));
 
     public static final RegistryObject<MobEffect> MOF =
-            EFFECTS.register("mof", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0x1A0A2A)
+            EFFECTS.register("mof", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0x1A0A2A, EffectHudSort.DISEASE_MOF)
                     .sharedIcon(ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, "mof")));
 
     public static final RegistryObject<MobEffect> PAIN =
-            EFFECTS.register("pain", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0xAA2244)
+            EFFECTS.register("pain", () -> new DiseaseMobEffect(MobEffectCategory.HARMFUL, 0xAA2244, EffectHudSort.SYMPTOM_PAIN)
                     .modifier(Attributes.ATTACK_SPEED,                  UUID.nameUUIDFromBytes("pain:attack_speed".getBytes(StandardCharsets.UTF_8)),       -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
                     .modifier(Attributes.ATTACK_DAMAGE,                 UUID.nameUUIDFromBytes("pain:attack_damage".getBytes(StandardCharsets.UTF_8)),      -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
                     .modifier(DiseaseAttributes.BLOCK_BREAK_SPEED.get(), UUID.nameUUIDFromBytes("pain:block_break_speed".getBytes(StandardCharsets.UTF_8)), -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL)
@@ -534,10 +535,10 @@ public class DiseaseEffects {
                     .modifier(Attributes.MOVEMENT_SPEED,                UUID.nameUUIDFromBytes("pain:movement_speed".getBytes(StandardCharsets.UTF_8)),     -0.10, AttributeModifier.Operation.MULTIPLY_TOTAL));
 
     public static final RegistryObject<MobEffect> SYMPTOMS_MANAGED =
-            EFFECTS.register("symptoms_managed", () -> new MobEffect(MobEffectCategory.BENEFICIAL, 0xFFD080) {});
+            EFFECTS.register("symptoms_managed", () -> new SortedMobEffect(MobEffectCategory.BENEFICIAL, 0xFFD080, EffectHudSort.SD_SYMPTOMS_MANAGED));
 
     public static final RegistryObject<MobEffect> TREATMENT_APPLIED =
-            EFFECTS.register("treatment_applied", () -> new MobEffect(MobEffectCategory.BENEFICIAL, 0x80D0FF) {});
+            EFFECTS.register("treatment_applied", () -> new SortedMobEffect(MobEffectCategory.BENEFICIAL, 0x80D0FF, EffectHudSort.SD_TREATMENT_APPLIED));
 
     public static final RegistryObject<MobEffect> IMMUNE_DEFICIENCY =
             EFFECTS.register("immune_deficiency", ImmuneDeficiencyEffect::new);
