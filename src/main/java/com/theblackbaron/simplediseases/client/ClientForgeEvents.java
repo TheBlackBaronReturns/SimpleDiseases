@@ -40,16 +40,9 @@ public class ClientForgeEvents {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.FROSTBITE.id())) {
-            if (DiseaseEffects.hasShiveringDisease(player)) {
-                event.setCanceled(true);
-            }
-            return;
-        }
-
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.FOOD_LEVEL.id())
-                && DiseaseEffects.hasStomachCramps(player)) {
-            event.getGuiGraphics().setColor(1.0F, 0.82F, 0.78F, 1.0F);
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.FROSTBITE.id())
+                && DiseaseEffects.hasShiveringDisease(player)) {
+            event.setCanceled(true);
         }
     }
 
@@ -57,11 +50,6 @@ public class ClientForgeEvents {
     public static void onRenderOverlayPost(RenderGuiOverlayEvent.Post event) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
-
-        if (event.getOverlay().id().equals(VanillaGuiOverlay.FOOD_LEVEL.id())) {
-            event.getGuiGraphics().setColor(1.0F, 1.0F, 1.0F, 1.0F);
-            return;
-        }
 
         if (!event.getOverlay().id().equals(VanillaGuiOverlay.AIR_LEVEL.id())) return;
         if (!DiseaseEffects.hasTachypnea(player)) return;

@@ -14,7 +14,8 @@
     "LivingEntityRendererMixin",
     "MobEffectTextureManagerMixin",
     "TextureAtlasHolderInvoker",
-    "GuiMixin"
+    "GuiMixin",
+    "ForgeGuiMixin"
   ],
   "injectors": {
     "defaultRequire": 1

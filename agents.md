@@ -22,16 +22,25 @@ No test framework. Verify features in-client.
 
 ## Development Principles
 
-**After correctness, the highest priorities for every change are performance, multiplayer compatibility, broad mod compatibility, and code optimization.** Treat these as hard constraints, not nice-to-haves.
+**After correctness, the highest priorities for every change are performance, multiplayer compatibility, cross-mod compatibility across the Forge ecosystem, and code optimization.** Simple Diseases is built for **100+ mod modpacks** — every feature must coexist with unknown mods without breaking them. Treat these as hard constraints, not nice-to-haves.
 
 | Principle | Expectation |
 |---|---|
 | **Performance** | Server-authoritative tick logic; precompute per-tick values once (e.g. recovery multipliers in `DiseaseEvents`); reuse collection caches; avoid per-player allocations on hot paths; prefer primitives and in-place mutation over new objects each tick. |
 | **Multiplayer** | Gameplay state lives on the server and syncs through vanilla channels (`MobEffectInstance`, NBT persistence) or minimal custom packets. World feedback uses `ServerLevel.sendParticles()` so nearby players see vomit, blood, cough, and ambient disease particles. Reserve `PacketDistributor.PLAYER` for **local HUD only** (e.g. `BleedingSplatterPacket`). Body shiver renders on all clients via synced effects + `LivingEntityRendererMixin`. |
-| **Mod compatibility** | Never call optional-mod classes outside `compat/` packages. Cold Sweat and Serene Seasons must have **offline fallbacks**. Optional client mixins use `require = 0` where appropriate (JEED). Detect mods at runtime (`ModList`, `ColdSweatCompat.LOADED`), never assume presence. |
+| **Cross-mod compatibility** | **Forge-first, non-invasive.** Prefer existing Forge and vanilla extension points before writing new infrastructure. Use `DeferredRegister`, the Forge event bus, `MobEffect` / attributes, tags, `SavedData`, and overlay events (`RenderGuiOverlayEvent`) over mixins, custom packets, or core-class patches. Keep mixins **narrow and few** — inject only where Forge/vanilla has no hook; use `require = 0` and `SimpleDiseasesMixinPlugin` for optional targets (JEED). Never call optional-mod classes outside `compat/`; detect at runtime (`ModList`, `ColdSweatCompat.LOADED`) and **fail open** with offline fallbacks. Do not cancel, replace, or globally override other mods' behavior. Avoid hard dependencies, static hooks on foreign classes, and broad `@Overwrite`s. Scope registrations to `simplediseases:` IDs. When a Forge API solves the problem, use it — do not reinvent it. |
 | **Code optimization** | Prefer **data-driven** definitions (`DiseaseRegistry.bootstrap()`, `SymptomConfig`, component bags) over scattered per-disease logic. **Centralize** shared behavior (`ColdSweatCompat`, `WorseningRoll`, `SymptomService`, `DiseaseContext`) instead of duplicating it across categories. **Remove redundancies** when consolidating. Keep modules **small, reusable, and composable** — one manager/service per concern, categories consume context rather than re-deriving state. |
 
-When a feature conflicts with these principles, redesign the feature — do not bolt on client-only state or hard dependencies.
+When a feature conflicts with these principles, redesign the feature — do not bolt on client-only state, hard dependencies, or invasive hooks.
+
+### Cross-mod decision order
+
+When implementing a feature, try approaches in this order:
+
+1. **Vanilla / Forge APIs** — effects, attributes, events, particles, sounds, data components, tags.
+2. **Forge client overlays** — `RenderGuiOverlayEvent`, `VanillaGuiOverlay`, `ForgeGui` methods (before mixins).
+3. **Targeted mixin** — single method, `@Inject` only, own-mod or documented vanilla hook; optional mixins gated behind mod detection.
+4. **Custom packet / new subsystem** — last resort; justify why vanilla sync or Forge events are insufficient.
 
 ---
 
@@ -42,17 +51,17 @@ ECS-lite disease model: `PlayerDiseaseState` holds per-disease `DiseaseInstance`
 ```
 com.theblackbaron.simplediseases
 ├── SimpleDiseases.java           — @Mod root; registers + event buses
-├── client/                       — Particles, HUD overlay, client tick
+├── client/                       — Particles, HUD overlays, debug overlay, tooltips
 ├── command/SdCommands.java       — /sd* debug and admin commands
 ├── compat/                       — Cold Sweat + Serene Seasons (never call mods elsewhere)
 ├── event/                        — DiseaseEvents, CureEvents, SymptomEvents
-├── mixin/                        — JEED tooltips, HUD shake/tint, tachypnea air, sprint hunger, shared icons
-├── network/                      — BleedingSplatterPacket + NetworkHandler
+├── mixin/                        — JEED tooltips, HUD shake/tint, sprint hunger, shared icons, sort order
+├── network/                      — BleedingSplatterPacket, DebugOverlayPacket, NetworkHandler
 ├── particle/                     — DiseaseParticles registry + DiseaseParticleEmitter
 ├── sound/DiseaseSounds.java
 └── status/                       — Effects, attributes, defs, managers, services
     ├── category/                 — DiseaseContext, Viral/Bacterial/Complication categories
-    ├── def/                      — DiseaseRegistry, WorseningRoll
+    ├── def/                      — DiseaseRegistry, WorseningRoll, PainProfile, ConditionType
     └── manager/                  — Contagion, Wetness, Injury, FluSeason, AccumFatigue, …
 ```
 
@@ -64,11 +73,17 @@ com.theblackbaron.simplediseases
 |---|---|---|
 | `PlayerMixin` | common | Double sprint food exhaustion during tachycardia |
 | `GuiMixin` | client | Tachycardia low-health heart shake |
-| `ForgeGuiMixin` | client | Stomach cramps red food-bar tint |
+| `ForgeGuiMixin` | client | Stomach cramps red food-bar tint (`renderFood`; after `setupOverlayRenderState`) |
 | `LivingEntityRendererMixin` | client | Fever/septic body shiver |
 | `MobEffectTextureManagerMixin` | client | Shared per-disease HUD icons |
-| `EffectRendererMixin` | client | JEED tooltip rows (`require = 0`) |
-| `ScreenExtensionsHandlerMixin` | client | Icon rows in JEED tooltips |
+| `EffectRendererMixin` | client | JEED disease tooltip post-process (`require = 0`; gated by `SimpleDiseasesMixinPlugin`) |
+| `ScreenExtensionsHandlerMixin` | client | Icon rows in JEED tooltips (JEED-only) |
+
+`SimpleDiseasesMixinPlugin` skips JEED mixins when JEED is not loaded.
+
+### HUD effect sort order
+
+All Simple Diseases `MobEffect`s extend `SortedMobEffect` and use reserved low Forge `getSortOrder` bands from `EffectHudSort` so icons sort **left of vanilla/mod defaults** (immunity → disease paths → symptoms → injury/indicators). Tier variants of the same disease share one sort slot. `DiseaseMobEffect` inherits this via `SortedMobEffect`.
 
 ---
 
@@ -99,8 +114,8 @@ Full per-disease parameters live in `DiseaseRegistry.bootstrap()`. Quick referen
 | `norovirus` | Viral | 3 | Waterborne reservoirs; max-saturation debuff; puddles |
 | `pneumonia` | Complication | 4 | Flu/Cold/RSV source; bad cough + breathless |
 | `bronchitis` | Complication | 3 | Flu/Cold/RSV source |
-| `cellulitis_staph` | Bacterial | 3 | Wound-seeded; Pain II persistent |
-| `sepsis_staph` | Complication | 4 | Cellulitis trigger; Pain III; no passive recovery |
+| `cellulitis_staph` | Bacterial | 3 | Wound-seeded; `PainProfile.CELLULITIS` persistent pain |
+| `sepsis_staph` | Complication | 4 | Cellulitis trigger; `PainProfile.SEPSIS`; no passive recovery |
 | `mof_staph` | Complication | 1 | Lethal Wither-rate damage; status effect `mof` |
 
 ---
@@ -128,7 +143,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Hallmarks | — |
 | Common | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat |
 | Severe (ADV) | Vomiting (`DRAIN_FOOD`); Shortness of Breath (`BREATHLESS`, 200 ticks); Tachypnea; Tachycardia |
-| Persistent | Malaise |
+| Persistent | Malaise + Mild Pain (`PainProfile.MILD_FLAT`) |
 | Episode pacing | 60–180 s · 45–90 s |
 
 ### `rsv` — Viral · 3 tiers
@@ -158,7 +173,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Hallmarks | Shortness of Breath (`BREATHLESS`, 200 ticks); Bloody Coughing (`DAMAGE`, 100 ticks) |
 | Common (*inherit-capable*) | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat; Vomiting (`DRAIN_FOOD`); Productive Coughing |
 | Severe (ADV) | Tachypnea; Tachycardia; Confusion |
-| Persistent | Malaise + Pain II |
+| Persistent | Malaise + Pain (`PainProfile.PNEUMONIA`) |
 | Episode pacing | 30–90 s · 30–60 s |
 
 ### `bronchitis` — Viral complication · 3 tiers · source: cold / flu / rsv
@@ -166,9 +181,9 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Layer | Symptoms |
 |---|---|
 | Hallmarks | Shortness of Breath (`BREATHLESS`, 200 ticks) |
-| Common (*inherit-capable*) | Coughing; Runny Nose; Headache (`NAUSEA`, 200 ticks); Sore Throat; Vomiting (`DRAIN_FOOD`); Productive Coughing |
+| Common (*inherit-capable*) | Coughing; Runny Nose; Wheezing (*inherit-only*); Headache (`NAUSEA`, 200 ticks); Sore Throat; Vomiting (`DRAIN_FOOD`); Productive Coughing |
 | Severe (ADV) | Tachypnea |
-| Persistent | Malaise + Pain I |
+| Persistent | Malaise + Mild Pain (`PainProfile.MILD_FLAT`) |
 | Episode pacing | 30–90 s · 30–60 s |
 
 ### `cellulitis_staph` — Bacterial · 3 tiers · wound-seeded
@@ -178,7 +193,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Hallmarks | Localized Redness (*static*) |
 | Common | — |
 | Severe (ADV) | Hypotension (`HYPOTENSION`); Tachycardia; Confusion |
-| Persistent | Malaise + Pain II |
+| Persistent | Malaise + Pain (`PainProfile.CELLULITIS`) |
 | Episode pacing | 60–180 s · 30–90 s |
 | Worsening thresholds | **1.5, 2.0** (aligned with cold; cap = 2.0) |
 
@@ -190,7 +205,7 @@ Authoritative source: `DiseaseRegistry.bootstrap()`. All diseases use pool thres
 | Common | Localized Redness (*static*, *inherit-only*); Confusion; Tachycardia; Tachypnea |
 | Severe (ADV) | Shortness of Breath (`BREATHLESS`, 200 ticks, *inherit-only*); Mottled Skin (*static*) |
 | Exclusive pairs | Localized Redness ↔ Mottled Skin (bidirectional; adding one clears the other from pool) |
-| Persistent | Malaise + Pain III |
+| Persistent | Malaise + Pain (`PainProfile.SEPSIS`) |
 | Episode pacing | 90–240 s · 45–120 s |
 
 Pre-latch: inherits matching active symptoms from cellulitis (e.g. redness from cellulitis hallmark). Post-latch: no new inheritance.
@@ -220,18 +235,34 @@ Rolled once at first latch. Honey reduces tier: 35% base, ×0.5 per prior succes
 
 ---
 
+## Disease Tier Effects
+
+Per-tier disease `MobEffect` variants carry **fever/shock metadata only** — no attack speed, mining, saturation, or other per-tier debuffs. Gameplay debuffs come from **symptoms** (episodic markers), **persistent Pain/Malaise** (`PersistentEffectService`), and the unified `pain` effect.
+
+Each tier variant may register a hidden `MAX_HEALTH` `MULTIPLY_TOTAL` penalty (not shown in JEED):
+
+| Condition | Penalty |
+|---|---|
+| Very High Fever (`FEVER_HIGH`, 40°C) | −5% max HP |
+| Hyperpyrexia (`FEVER_SEVERE`, ≥41°C) | −15% max HP |
+| Septic shock | −25% max HP |
+
+Shock beats fever when both would apply. `DiseaseEvents.enforceMaxHealthCap` clamps current HP server-side when a penalty is active.
+
+---
+
 ## Fever System
 
-`double feverOffset` on `DiseaseMobEffect` — **not** an attribute modifier.
+`double feverOffset` on `DiseaseMobEffect` — **not** an attribute modifier (recovery/warmth only). Max-health penalties are separate hidden modifiers (see **Disease Tier Effects**).
 
-| Level | Offset (MC WORLD scale) | JEED display |
+| Level | Offset (MC WORLD scale) | Tooltip / JEED display |
 |---|---|---|
-| Light | +0.05 | Mild Fever (38°C) |
-| Mild | +0.10 | High Fever (39°C) |
-| High | +0.15 | Very High Fever (40°C) |
-| Severe | +0.20 | Hyperpyrexia (≥41°C) |
+| Light | +0.05 | Mild Fever |
+| Mild | +0.10 | High Fever |
+| High | +0.15 | Very High Fever (−5% ♥) |
+| Severe | +0.20 | Hyperpyrexia (−15% ♥) |
 
-- **Tooltip:** `EffectRendererMixin` injects colored fever/shock/pain/symptom rows under JEED `"potion.whenDrank"` (`require = 0`). Fever and septic shock use tier-specific icons (`fever_light` … `fever_severe`, `septic_shock`) via `IconTextTooltipRenderer`.
+- **JEED disease tooltips:** `EffectRendererMixin` post-processes `EffectRenderer.getTooltipsWithDescription` (`require = 0`, JEED-only). `DiseaseTooltipHelper` strips the vanilla/JEED `"When Applied:"` attribute block (including hidden max-health lines), inserts a yellow **condition row** (`ConditionType` organ icon + label under the effect name), then a **Disease Symptoms:** section listing fever/shock, tier-scaled persistent pain, and active pool symptoms. Fever/shock/pain rows use `IconTextTooltipRenderer` icons.
 - **Cold Sweat WORLD modifiers:** `FeverWorldTempModifier` (+) and `SepticShockTempModifier` (−) synced each tick via `ColdSweatCompat.syncDiseaseWorldModifiers`.
 - **Malaise scaling:** `PersistentEffectService` applies infinite malaise while latched; amp = max `DiseaseMobEffect.malaiseAmplifierFrom()` across latched disease variants (fever/shock → amp 0–3).
 
@@ -294,7 +325,7 @@ Anti-exploit for standing in rain/wind while latched on a curable disease. **Not
 
 ## Symptom System
 
-Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **commonAdds**, **severe** (`SymptomBand.ADVANCED`), plus **persistentEffects** (malaise + Pain via `PersistentEffectService`). Episodic rotation via `SymptomService` + `SymptomPoolComponent` (3 threshold slots: 0.10 / 0.40 / 0.70).
+Layered config: `SymptomConfig` holds **hallmarks** (fixed-order pool fill), **commonAdds**, **severe** (`SymptomBand.ADVANCED`), plus **persistentEffects** (malaise + optional `PainProfile` via `PersistentEffectService`). Episodic rotation via `SymptomService` + `SymptomPoolComponent` (3 threshold slots: 0.10 / 0.40 / 0.70).
 
 ### SymptomEntry fields
 
@@ -347,8 +378,7 @@ Cough bursts: offsets `{0, 8, 17, 26}` ticks, 1–2 particles per burst, chest h
 |---|---|
 | Sore Throat + eat | 0.5 HP magic damage per hunger point restored (on finish); actionbar message |
 | Stomach Cramps + heal ≤ 1 HP (no Regen) | Cancel heal; red hunger-bar tint while active |
-| Pain amp ≥ 2 + sleep | Block sleep |
-| Active norovirus tier | Cap saturation at `disease_max_saturation` |
+| Pain amp ≥ 3 + sleep | Block sleep (Severe / Excruciating Pain) |
 | Malaise on player | Scale jump via `disease_jump_factor` on `LivingJumpEvent` |
 
 ---
@@ -373,7 +403,7 @@ Persisted in `PlayerInjuryState` (NBT under `"injury"` on player). Ticked from `
 
 **Lacerating** sources (≥ **4 HP** dealt): player/mob sharp weapons, arrows/tridents, mob bites. Tiered roll by armor (10/7/4/2% unarmored→heavy); high-damage bypass lowers effective armor tier; heavy armor + axe/crossbow bonus rolls.
 
-On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding. **Pain I** is applied continuously via `PersistentEffectService` while the wound is open (until cellulitis latches).
+On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding. **Acute Pain** (amplifier 1) via `PersistentEffectService` while the wound is open (until cellulitis latches).
 
 ### Internal bleeding
 
@@ -393,7 +423,7 @@ Per-second chance while flesh wound open (pre-latch cellulitis), scaled by wound
 
 ### Shared disease status icons
 
-Per-tier disease `MobEffect`s still register separately (gameplay modifiers, fever, tier swapping unchanged), but **all tiers of the same disease path share one HUD/inventory icon**:
+Per-tier disease `MobEffect`s still register separately (fever/shock tier swapping, hidden max-HP penalties), but **all tiers of the same disease path share one HUD/inventory icon**:
 
 - **Assets:** one PNG per disease path under `textures/mob_effect/` (e.g. `flu.png`, `pneumonia_flu.png`, `mof.png`) — 13 disease files instead of 42 tier-specific files. Symptom/indicator effects remain one PNG per registry name (`pain.png`, `cough.png`, etc.).
 - **Registration:** `DiseaseEffects.registerVariants()` sets `DiseaseMobEffect.sharedIconId` to `simplediseases:<path>`.
@@ -431,8 +461,8 @@ Disease ambient particles (cold/flu/rsv/norovirus) still use `DiseaseParticleEmi
 | Body shiver (high fever / septic shock) | **Yes** | Synced `MobEffectInstance` + client `LivingEntityRendererMixin` (`FEVER_HIGH`+ or shock only) |
 | Ground particles (blood, vomit, cough, sputum, disease ambient) | **Yes** | Server `sendParticles` (~32 block range); all clients need the mod |
 | Symptom sounds | **Yes** | `level.playSound` at entity position |
-| Screen blood HUD splatters | **No** | `BleedingSplatterPacket` → affected player only |
-| Heart shake, food-bar tint, tachypnea air overlay, debug actionbar | **No** | Local client HUD / mixins |
+| Screen blood HUD splatters, debug overlay HUD | **No** | `BleedingSplatterPacket` / `DebugOverlayPacket` → affected player only |
+| Heart shake, food-bar tint, tachypnea air overlay | **No** | Local client HUD / mixins |
 
 ---
 
@@ -475,13 +505,15 @@ Persisted `FluSeasonData`. Autumn 40% / Winter 60% season pick; 60% outbreak rol
 
 ## Mod Compatibility
 
+Known optional integrations follow the **cross-mod compatibility** rules above: `compat/` facades, runtime detection, offline fallbacks, and non-invasive hooks only.
+
 | Mod | Integration |
 |---|---|
 | **Cold Sweat** | `ColdSweatCompat` — drying, damp/wind gates, recovery multiplier, objective recovery warmth, fever/shock WORLD modifiers, waterskin/goat fur; full fallback when absent |
 | **Serene Seasons** | `SereneSeasonsCompat` — winter RSV/noro/flu; compile stubs excluded from JAR |
-| **JEED** | Optional fever tooltip mixin (`require = 0`) |
+| **JEED** | Optional disease tooltip mixin + icon rows (`require = 0`; skipped entirely when JEED absent via `SimpleDiseasesMixinPlugin`) |
 
-Never call Cold Sweat or Serene Seasons classes outside `*Compat` packages. All optional integrations must degrade gracefully on dedicated servers and in single-player without those mods installed.
+Never call Cold Sweat or Serene Seasons classes outside `*Compat` packages. All optional integrations must degrade gracefully on dedicated servers and in single-player without those mods installed. For mods not listed here, assume they are present in large modpacks — do not add integrations that require their APIs unless isolated in `compat/` with fallbacks.
 
 ---
 
@@ -491,25 +523,33 @@ All on `EntityType.PLAYER`, syncable `RangedAttribute`:
 
 | Name | Default | Used by |
 |---|---|---|
-| `disease_max_saturation` | 5.0 | Norovirus (ADDITION) |
-| `disease_knockback_factor` | 1.0 | Cellulitis, Pain |
-| `disease_block_break_speed` | 1.0 | Respiratory diseases, Pain |
-| `disease_jump_factor` | 1.0 | Malaise |
+| `disease_max_saturation` | 5.0 | Reserved; `SymptomEvents` caps saturation when attribute &lt; 5.0 (no disease applies it currently) |
+| `disease_knockback_factor` | 1.0 | Pain (`MULTIPLY_TOTAL` −10% per amp level) |
+| `disease_block_break_speed` | 1.0 | Pain (`SymptomEvents.onBreakSpeed`) |
+| `disease_jump_factor` | 1.0 | Malaise (`MULTIPLY_TOTAL`; scaled by amp + 1) |
 
 ---
 
-## Pain Tiers
+## Pain Profiles & Tiers
 
-`DiseaseEffects.PAIN` (`pain`) — `DiseaseMobEffect` with −10% `MULTIPLY_TOTAL` on attack speed, attack damage, mining speed, knockback, movement speed (scaled by amp + 1).
+Persistent pain uses a single `DiseaseEffects.PAIN` (`pain`) effect. Amplifier is chosen by `PainProfile` in each disease's `PersistentEffects` (via `PersistentEffectService`) and open flesh wounds. `PersistentEffectService` keeps the **highest** amplifier across all sources.
 
-| Context | Amplifier | Display |
-|---|---|---|
-| Open flesh wound (persistent) | 0 | Pain I |
-| Bronchitis (persistent) | 0 | Pain I |
-| Pneumonia / Cellulitis (persistent) | 1 | Pain II |
-| Sepsis (persistent) | 2 | Pain III |
+`PainProfile` mappings (amplifier → display name):
 
-Sleep blocked at amp ≥ 2 (`message.simplediseases.pain_no_sleep`).
+| Profile | Diseases | Mild / Light | Moderate | Severe | Debilitating |
+|---|---|---|---|---|---|
+| `MILD_FLAT` | Flu, Bronchitis | 0 Mild (I) | 0 | 0 | 0 |
+| `PNEUMONIA` | Pneumonia | 1 Acute (II) | 1 | 2 Intense (III) | 2 |
+| `CELLULITIS` | Cellulitis | 1 | 1 | 2 | 2 |
+| `SEPSIS` | Sepsis | 2 Intense (III) | 2 | 3 Severe (IV) | 3 |
+
+Open flesh wound (pre-cellulitis): amplifier **1** (Acute II).
+
+`pain` applies −10% `MULTIPLY_TOTAL` per level to attack speed, attack damage, mining speed (`disease_block_break_speed`), knockback, and movement speed (effective scale = amp + 1).
+
+Display labels: `simplediseases.pain.0` … `simplediseases.pain.4` (Mild I through Excruciating V). Sleep blocked at amp **≥ 3** (`message.simplediseases.pain_no_sleep`).
+
+Configure in `DiseaseRegistry.bootstrap()` via `PersistentEffects.withPain(PainProfile.…)`.
 
 ---
 
@@ -533,10 +573,12 @@ Contagion villager exposure is in-memory only.
 
 ## Debug Commands
 
+Toggle debug overlays with `/sdviral` and `/sdbacterial` (run again to disable). While active, the server builds debug lines each tick in `DiseaseEvents` and syncs them to a **client HUD overlay** (`DebugOverlayPacket` → `ClientDebugOverlay`, drawn after the crosshair). Clearing a toggle sends an empty packet for that section.
+
 | Command | Permission | Description |
 |---|---|---|
-| `/sddebugviral` | Any | Viral debug overlay: diseases, wet/dry/W, `recov`, `ACCUM`, `exposure` (streak s), `drain` |
-| `/sddebugbacterial` | Any | Bacterial debug overlay: diseases, wound, `recov`, `drain` (cap-recovery only) |
+| `/sdviral` | Any | Toggle viral debug HUD: diseases, wet/dry/W, `recov`, `ACCUM`, `exposure` (streak s), `drain` |
+| `/sdbacterial` | Any | Toggle bacterial debug HUD: diseases, wound, `recov`, `drain` (cap-recovery only) |
 | `/sdfluseason` | Any | Force flu season ON/OFF |
 | `/sdimmune boost\|deficient\|clear` | Op | Immunity effects |
 | `/sdaccumulate <disease> <amount>` | Op | Add progress; auto-seeds complication sources |
@@ -550,7 +592,9 @@ Contagion villager exposure is in-memory only.
 
 - Register via `DeferredRegister` only (`DiseaseEffects.EFFECTS`, etc.) — never direct Forge registries.
 - New diseases → `DiseaseRegistry.bootstrap()` with appropriate def type.
-- Tier variants → `DiseaseEffects.registerVariants()`; fever via `.fever()`, not attributes. Set `.sharedIcon()` to the disease path for shared HUD icons.
+- Tier variants → `DiseaseEffects.registerVariants()`; fever/shock via `.fever()` / `.shock()` only on tier effects — **no per-tier attack/mining/saturation debuffs**. Hidden max-health penalties applied automatically for high fever / shock. Set `.sharedIcon()` to the disease path for shared HUD icons.
+- Persistent pain → `PersistentEffects.withPain(PainProfile.…)` in `SymptomConfig`; applied by `PersistentEffectService`, not manual effect applies.
+- JEED tooltips → `DiseaseTooltipHelper` + `ConditionType`; do not add fever as a visible attribute modifier.
 - MOF → single registered effect `DiseaseEffects.MOF` (`mof`), not a tier variant map.
 - Complications → `triggeredBy` source required; progress gated on active source.
 - Symptom episodes → `SymptomService` only; add to `SymptomConfig`, not manual tick applies.
@@ -559,5 +603,5 @@ Contagion villager exposure is in-memory only.
 - Worsening rolls → `WorseningRoll.chance(worsenings)` for momentum stochastic tiers.
 - Accum fatigue → `AccumFatigueManager.tick()` after env-accum flag is known; never duplicate damp/wind detection.
 - Bleeding/vomit/cough visuals → server `sendParticles` (multiplayer-visible) + client particle classes; HUD splatter via player-only network packet.
-- Performance / multiplayer / mod compat / code optimization → see **Development Principles**; do not regress them for convenience.
+- Performance / multiplayer / cross-mod compat / code optimization → see **Development Principles**; do not regress them for convenience. Prefer Forge APIs over mixins; keep hooks non-invasive for 100+ mod modpacks.
 - Symptom side effects with continuous behavior → custom `MobEffect` subclass (`HypotensionEffect`, `BloodyCoughingEffect`) or mixins (`PlayerMixin`, `GuiMixin`).
