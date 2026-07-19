@@ -57,9 +57,6 @@ public final class EffectHudSort {
     // --- Injury / indicators / treatment ----------------------------------------------------------
     public static final int SD_DAMP              = sdOther(0);
     public static final int SD_CHILLY_WIND       = sdOther(1);
-    public static final int SD_BLEEDING          = sdOther(2);
-    public static final int SD_INTERNAL_BLEEDING = sdOther(3);
-    public static final int SD_BLOOD_LOSS        = sdOther(4);
     public static final int SD_SYMPTOMS_MANAGED  = sdOther(5);
     public static final int SD_TREATMENT_APPLIED = sdOther(6);
 

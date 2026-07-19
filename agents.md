@@ -387,31 +387,11 @@ Cough bursts: offsets `{0, 8, 17, 26}` ticks, 1–2 particles per burst, chest h
 
 Persisted in `PlayerInjuryState` (NBT under `"injury"` on player). Ticked from `DiseaseEvents.onPlayerTick`.
 
-### Bleeding (external)
-
-| Source | Rule |
-|---|---|
-| Tiered weapon hit | ≥ 5 HP (≥ 4 HP sharp mob melee); armor-tier chance 10/8/5/1%; amount 2.5/1.5/1.0/0.5 |
-| Mob bite | 50% +1.0 light bleed (Zombie, Spider, Animal; llama excluded) |
-| Cactus | +1.0 every 20 ticks |
-| Bare-hand glass break | +1.0 light bleed |
-| Flesh wound applied | Bonus bleed 0.5 / 1.0 / 1.5 by wound severity |
-
-`BleedingEffect` (amp > 0): periodic magic damage + HUD splatter packet. Decays over time; flesh wounds set a bleeding floor by severity.
-
 ### Flesh wounds
 
 **Lacerating** sources (≥ **4 HP** dealt): player/mob sharp weapons, arrows/tridents, mob bites. Tiered roll by armor (10/7/4/2% unarmored→heavy); high-damage bypass lowers effective armor tier; heavy armor + axe/crossbow bonus rolls.
 
-On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe), bonus bleeding. **Acute Pain** (amplifier 1) via `PersistentEffectService` while the wound is open (until cellulitis latches).
-
-### Internal bleeding
-
-15% on blunt/fall/explosion hits ≥ 5 HP (not arrows/axes). Scales with damage and armor.
-
-### Blood loss
-
-Total wound load ≥ 3.5 and HP ≤ 6 → `blood_loss` effect (HP floor 6).
+On success: wound duration 3000/6000/9000 ticks (mild/moderate/severe). **Acute Pain** (amplifier 1) via `PersistentEffectService` while the wound is open (until cellulitis latches). Wounds deal no damage over time — their pressure is pain, blood visuals, and Cellulitis seeding. Flesh-wound severity drives both blood visuals directly (world blood trail + HUD splatter, see Visual Effects).
 
 ### Cellulitis seeding
 
@@ -433,8 +413,8 @@ Per-tier disease `MobEffect`s still register separately (fever/shock tier swappi
 
 - **Textures:** `blood_0`–`blood_6` (MIT-licensed from Majrusz Progressive Difficulty)
 - **Client:** `BleedingParticle` — ground-flattening splats, `quadSize 0.1 × 1.5` render scale, ~40 s lifetime
-- **Server:** `DiseaseParticleEmitter.emitBleeding` every 3 ticks; count `round(0.5 + 0.5 × (15 + amp) × walkDelta)`; spawn at entity center; 0.25× spread
-- **HUD:** `BleedingHudOverlay` — 6×4 pooled screen splatters on bleed damage pulse; `BleedingSplatterPacket` via `NetworkHandler`
+- **Server:** `DiseaseParticleEmitter.emitBleeding` every 3 ticks while a flesh wound is open; count `round(0.5 + 0.5 × (15 + severity) × walkDelta)` (severity 0–2); spawn at entity center; 0.25× spread
+- **HUD:** `BleedingHudOverlay` — 6×4 pooled screen splatters; `BleedingSplatterPacket` via `NetworkHandler`. Burst of 4 on wound application, then periodic splatters at 600/300/120-tick intervals (2/3/3 splatters) by wound severity (`InjuryManager.tick`)
 
 ### Vomit particles
 
@@ -565,7 +545,7 @@ Configure in `DiseaseRegistry.bootstrap()` via `PersistentEffects.withPain(PainP
 | `accumFatigueStreak` | Continuous damp/wind re-exposure streak (ticks) |
 | `accumFatigueWarned` | 8-min warn already shown |
 | `fatigueDeficiency` | Fatigue-applied immunodeficiency flag (distinct from `/sdimmune`) |
-| `injury` | Bleeding, internal bleeding, flesh wound ticks, pain episode timer |
+| `injury` | Flesh wound ticks, pain episode timer |
 
 Contagion villager exposure is in-memory only.
 

@@ -507,17 +507,8 @@ public class DiseaseEffects {
     public static final RegistryObject<MobEffect> PRODUCTIVE_COUGHING =
             EFFECTS.register("productive_coughing", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xA0522D, EffectHudSort.SYMPTOM_PRODUCTIVE_COUGHING));
 
-    public static final RegistryObject<MobEffect> BLEEDING =
-            EFFECTS.register("bleeding", BleedingEffect::new);
-
     public static final RegistryObject<MobEffect> FLESH_WOUND =
             EFFECTS.register("flesh_wound", () -> new SortedMobEffect(MobEffectCategory.HARMFUL, 0x7A1B14, EffectHudSort.DISEASE_FLESH_WOUND));
-
-    public static final RegistryObject<MobEffect> INTERNAL_BLEEDING =
-            EFFECTS.register("internal_bleeding", InternalBleedingEffect::new);
-
-    public static final RegistryObject<MobEffect> BLOOD_LOSS =
-            EFFECTS.register("blood_loss", BloodLossEffect::new);
 
     public static final RegistryObject<MobEffect> LOCALIZED_REDNESS =
             EFFECTS.register("localized_redness", () -> new SortedMobEffect(MobEffectCategory.NEUTRAL, 0xCC4422, EffectHudSort.SYMPTOM_LOCALIZED_REDNESS));

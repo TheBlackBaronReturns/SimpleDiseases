@@ -44,15 +44,11 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
@@ -315,28 +311,6 @@ public class DiseaseEvents {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (player.level().isClientSide) return;
         injuryManager.onPlayerDamaged(player, contagionManager.getOrCreate(player), event.getSource(), event.getAmount());
-    }
-
-    @SubscribeEvent
-    public void onBlockBreak(BlockEvent.BreakEvent event) {
-        if (!(event.getPlayer() instanceof ServerPlayer player)) return;
-        if (player.level().isClientSide) return;
-        if (!isBreakableGlass(event.getState())) return;
-        injuryManager.onGlassBrokenBareHand(player, contagionManager.getOrCreate(player));
-    }
-
-    private static boolean isBreakableGlass(net.minecraft.world.level.block.state.BlockState state) {
-        if (!state.is(BlockTags.IMPERMEABLE)) return false;
-        return !state.is(Blocks.ICE) && !state.is(Blocks.PACKED_ICE)
-                && !state.is(Blocks.BLUE_ICE) && !state.is(Blocks.FROSTED_ICE);
-    }
-
-    @SubscribeEvent
-    public void onLivingHeal(LivingHealEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (player.hasEffect(DiseaseEffects.BLOOD_LOSS.get())) {
-            event.setCanceled(true);
-        }
     }
 
     private ResourceLocation activeViral(PlayerDiseaseState state) {

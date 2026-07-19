@@ -46,6 +46,8 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 
 Why does Cellulitis get the confusion symptom in its tooltip?
 
+~~Rebalance bleeding damage as it is way too strong currently~~ — Resolved: bleeding/internal bleeding/blood loss mechanic removed entirely; blood visuals now driven by flesh wounds
+
 Fix bleeding particle effect consistency (align with majrusz)
 
 Fix chance of cellulitis being too low as it is currently
