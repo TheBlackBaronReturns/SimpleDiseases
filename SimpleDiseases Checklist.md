@@ -44,7 +44,9 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
-Rebalance bleeding damage as it is way too strong currently
+Fix bleeding particle effect consistency (align with majrusz)
+
+Fix chance of cellulitis being too low as it is currently
 
 Check if immunity impacts worsening chance
 
@@ -52,11 +54,11 @@ Give disease mob effects special colors and re-arrange mob effect priority on th
 
 Complication accumulation should not cease symptoms of the source disease
 
-Seperate disease exclusion into organs *and* pathogen type rather than just grouped by pathogen type as it is now (sepsis should act as the organ type of whatever its source disease was)
+~~Seperate disease exclusion into organs *and* pathogen type rather than just grouped by pathogen type as it is now (sepsis should act as the organ type of whatever its source disease was)~~
 
 ~~Change the fever system: currently players can exploit by staying in a cold biome wiyh a very light cold that never gets cured~~
 
-Septic should be a unique disease wherein inheritance only symptoms should serve as an additional fourth symptom representing the continuation of the source disease
+Sepsis should be a unique disease wherein inheritance only symptoms should serve as an additional fourth symptom representing the continuation of the source disease
 
 ~~Adding tooltips/icons for each symptom on the disease mob effect itself~~
 
