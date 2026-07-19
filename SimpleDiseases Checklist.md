@@ -44,6 +44,8 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
+Why does Cellulitis get the confusion symptom in its tooltip?
+
 Fix bleeding particle effect consistency (align with majrusz)
 
 Fix chance of cellulitis being too low as it is currently
