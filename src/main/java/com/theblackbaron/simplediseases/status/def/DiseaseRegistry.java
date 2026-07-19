@@ -25,10 +25,15 @@ public final class DiseaseRegistry {
     public static final ResourceLocation SEPSIS_STAPH     = new ResourceLocation(SimpleDiseases.MOD_ID, "sepsis_staph");
     public static final ResourceLocation MOF_STAPH        = new ResourceLocation(SimpleDiseases.MOD_ID, "mof_staph");
 
+    /** Pathogen type values — ColdSweat recovery-warmth thresholds, environmental complication-worsening
+     *  gate, and debug-panel bucketing. NOT the mutual-exclusion key; see {@link DiseaseDef#exclusionGroup()}. */
     public static final String GROUP_VIRAL    = "viral";
     public static final String GROUP_BACTERIAL = "bacterial";
 
     public static final long VIRAL_IMMUNITY_TICKS = 20L * 60 * 20; // 20 minutes
+
+    /** Max distinct composite exclusion groups (organ+pathogen) a player may have occupied at once. */
+    public static final int MAX_CONCURRENT_SLOTS = 3;
 
     private static final Map<ResourceLocation, DiseaseDef> BY_ID = new LinkedHashMap<>();
 
@@ -62,7 +67,7 @@ public final class DiseaseRegistry {
         if (!BY_ID.isEmpty()) return;
 
         register(new ViralDiseaseDef(
-            COLD, 3, () -> DiseaseParticles.COLD.get(), GROUP_VIRAL,
+            COLD, 3, () -> DiseaseParticles.COLD.get(), ConditionType.RESPIRATORY, GROUP_VIRAL,
             2.0, 1.0, 0.000030, 24000L,
             symptomConfig(
                 List.of(),
@@ -83,7 +88,7 @@ public final class DiseaseRegistry {
         ));
 
         register(new ViralDiseaseDef(
-            FLU, 4, () -> DiseaseParticles.FLU.get(), GROUP_VIRAL,
+            FLU, 4, () -> DiseaseParticles.FLU.get(), ConditionType.RESPIRATORY, GROUP_VIRAL,
             10.0, 1.0, 0.000030, 48000L,
             symptomConfig(
                 List.of(),
@@ -113,7 +118,7 @@ public final class DiseaseRegistry {
         ));
 
         register(new ViralDiseaseDef(
-            RSV, 3, () -> DiseaseParticles.RSV.get(), GROUP_VIRAL,
+            RSV, 3, () -> DiseaseParticles.RSV.get(), ConditionType.RESPIRATORY, GROUP_VIRAL,
             10.0, 1.0, 0.000030, 36000L,
             symptomConfig(
                 List.of(
@@ -139,7 +144,7 @@ public final class DiseaseRegistry {
         ));
 
         register(new ViralDiseaseDef(
-            NOROVIRUS, 3, () -> DiseaseParticles.NOROVIRUS.get(), GROUP_VIRAL,
+            NOROVIRUS, 3, () -> DiseaseParticles.NOROVIRUS.get(), ConditionType.GI, GROUP_VIRAL,
             2.0, 1.0, 0.00006, 6000L,
             symptomConfig(
                 List.of(),
@@ -161,7 +166,7 @@ public final class DiseaseRegistry {
 
         // Pneumonia: viral complication (flu/cold/rsv source), 4 tiers, stochastic momentum worsening.
         register(new ComplicationDiseaseDef(
-            PNEUMONIA, 4, GROUP_VIRAL, 10.0, 1.0, 20L * 60 * 15, 20L * 60 * 30,
+            PNEUMONIA, 4, ConditionType.RESPIRATORY, GROUP_VIRAL, 10.0, 1.0, 20L * 60 * 15, 20L * 60 * 30,
             symptomConfig(
                 List.of(
                     new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
@@ -199,7 +204,7 @@ public final class DiseaseRegistry {
 
         // Bronchitis: viral complication (flu/cold/rsv source), 3 tiers, stochastic momentum worsening.
         register(new ComplicationDiseaseDef(
-            BRONCHITIS, 3, GROUP_VIRAL, 10.0, 1.0, 20L * 60 * 15, 20L * 60 * 30,
+            BRONCHITIS, 3, ConditionType.RESPIRATORY, GROUP_VIRAL, 10.0, 1.0, 20L * 60 * 15, 20L * 60 * 30,
             symptomConfig(
                 List.of(
                     new SymptomEntry(DiseaseEffects.SHORTNESS_OF_BREATH, SymptomAction.BREATHLESS,
@@ -234,7 +239,7 @@ public final class DiseaseRegistry {
 
         // Staph cellulitis: wound-seeded bacterial infection.
         register(new BacterialDiseaseDef(
-            CELLULITIS_STAPH, 3, GROUP_BACTERIAL, 2.0, 1.0,
+            CELLULITIS_STAPH, 3, ConditionType.TISSUE, GROUP_BACTERIAL, 2.0, 1.0,
             1.0 / 4800.0,
             1.0 / 12000.0,
             1.0 / 9000.0,
@@ -261,7 +266,7 @@ public final class DiseaseRegistry {
         // Sepsis (staph): bacterial complication triggered by severe cellulitis at cap. 4 tiers; deterministic
         // worsening drives toward Debilitating, which gates MOF.
         register(new ComplicationDiseaseDef(
-            SEPSIS_STAPH, 4, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
+            SEPSIS_STAPH, 4, ConditionType.SYSTEMIC, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
             symptomConfig(
                 List.of(
                     new SymptomEntry(DiseaseEffects.HYPOTENSION, SymptomAction.HYPOTENSION, SymptomBand.COMMON, 200)
@@ -298,7 +303,7 @@ public final class DiseaseRegistry {
         // Multiple Organ Failure: complication of Debilitating sepsis. No symptoms; once latched it
         // applies direct lethal damage at Wither-I rate until the player dies or is cured.
         register(new ComplicationDiseaseDef(
-            MOF_STAPH, 1, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
+            MOF_STAPH, 1, ConditionType.SYSTEMIC, GROUP_BACTERIAL, 10.0, 1.0, 0L, 0L,
             SymptomConfig.empty(),
             "message.simplediseases.caught_mof",
             "message.simplediseases.cured_mof",

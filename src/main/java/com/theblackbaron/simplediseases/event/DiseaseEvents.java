@@ -172,52 +172,59 @@ public class DiseaseEvents {
         tickCoughParticles(player, gameTime);
         boolean isDamp = player.hasEffect(DiseaseEffects.DAMP.get());
 
+        // Composite exclusion groups for the two organs handled directly in this method (respiratory:
+        // damp/wind + contact incubation; GI: reservoir/puddle norovirus). Cheap map lookups, computed
+        // once per tick rather than per-check.
+        String respGroup = DiseaseRegistry.get(DiseaseRegistry.FLU).exclusionGroup();
+        String noroGroup  = DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS).exclusionGroup();
+
         boolean reservoirActive = false;
         boolean inReservoir = WaterborneManager.isInInfectedWater(player, state, gameTime);
         boolean noroLatched  = state.inRecovery(DiseaseRegistry.NOROVIRUS);
         boolean inPuddleZone = lingering.isInZone(player);
         boolean inLingering  = inPuddleZone && !noroLatched;
-        ResourceLocation active = activeViral(state);
-        boolean hasViralComplication = state.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL);
-        if ((inReservoir || inLingering) && !state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)
-                && !hasViralComplication) {
-            if (active == null || active.equals(DiseaseRegistry.NOROVIRUS)
-                    || canViralTakeHold(state, active, DiseaseRegistry.NOROVIRUS)) {
-                if (active != null && !active.equals(DiseaseRegistry.NOROVIRUS)) state.clearProgress(active);
-                double base = inReservoir ? WaterborneManager.exposureRate(player) : 0.0;
-                if (inLingering) base = Math.max(base, WaterborneManager.submergedRate());
-                state.addProgress(DiseaseRegistry.NOROVIRUS, base * ImmuneManager.getWaterborneMultiplier(player));
-                active = DiseaseRegistry.NOROVIRUS;
-                reservoirActive = true;
-            }
+        ResourceLocation activeResp = state.activeInGroup(respGroup);
+
+        // Norovirus (GI) is fully decoupled from whatever's active respiratory-side — the two organs
+        // progress independently. Norovirus is the only gi_viral disease, so there's no same-organ rival
+        // to switch away from; the only gate is its own immunity/complication state plus the slot cap.
+        boolean noroInGroup = state.progress(DiseaseRegistry.NOROVIRUS) > 0.0 || noroLatched;
+        boolean noroEligible = !state.isGroupImmune(noroGroup, gameTime)
+                && !state.hasActiveComplication(noroGroup)
+                && (noroInGroup || state.canStartNewSlot(noroGroup));
+        if ((inReservoir || inLingering) && noroEligible) {
+            double base = inReservoir ? WaterborneManager.exposureRate(player) : 0.0;
+            if (inLingering) base = Math.max(base, WaterborneManager.submergedRate());
+            state.addProgress(DiseaseRegistry.NOROVIRUS, base * ImmuneManager.getWaterborneMultiplier(player));
+            reservoirActive = true;
         }
 
         boolean inInfectedWater = inReservoir || inPuddleZone;
         boolean enteredInfected = inInfectedWater && !state.wasInInfectedWater();
-        if (enteredInfected && state.getPendingIncubation() <= 0.0 && !noroLatched && !hasViralComplication
-                && !state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)) {
-            boolean noroCanTakeHold = active == null || active.equals(DiseaseRegistry.NOROVIRUS)
-                    || canViralTakeHold(state, active, DiseaseRegistry.NOROVIRUS);
-            if (noroCanTakeHold) {
-                ViralDiseaseDef noroDef = (ViralDiseaseDef) DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS);
-                state.setPendingIncubation(noroDef.rollIncubation(player.getRandom(), ImmuneManager.isImmunodeficient(player)),
-                        DiseaseRegistry.NOROVIRUS);
-            }
+        if (enteredInfected && state.getPendingIncubation() <= 0.0 && !noroLatched && noroEligible) {
+            ViralDiseaseDef noroDef = (ViralDiseaseDef) DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS);
+            state.setPendingIncubation(noroDef.rollIncubation(player.getRandom(), ImmuneManager.isImmunodeficient(player)),
+                    DiseaseRegistry.NOROVIRUS);
         }
         state.setWasInInfectedWater(inInfectedWater);
 
         double pendingIncubation = state.getPendingIncubation();
         if (pendingIncubation > 0.0) {
             ResourceLocation incubationId = state.getPendingIncubationId();
-            boolean stickyOther = active != null && !active.equals(incubationId)
-                    && (state.inRecovery(active) || state.progress(active) >= NULLIFY_THRESHOLD);
-            if (incubationId == null || state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime) || hasViralComplication || stickyOther) {
+            // Scoped to incubationId's own organ+pathogen group — it may be norovirus (GI, reservoir
+            // entry) or cold/flu/rsv (respiratory, contact) — never compare across organs.
+            String incGroup = incubationId != null ? DiseaseRegistry.get(incubationId).exclusionGroup() : null;
+            ResourceLocation activeSameGroup = incGroup != null ? state.activeInGroup(incGroup) : null;
+            boolean stickyOther = activeSameGroup != null && !activeSameGroup.equals(incubationId)
+                    && (state.inRecovery(activeSameGroup) || state.progress(activeSameGroup) >= NULLIFY_THRESHOLD);
+            if (incubationId == null || state.isGroupImmune(incGroup, gameTime)
+                    || state.hasActiveComplication(incGroup) || stickyOther) {
                 state.clearPendingIncubation();
             } else {
-                if (active != null && !active.equals(incubationId)) state.clearProgress(active);
+                if (activeSameGroup != null && !activeSameGroup.equals(incubationId)) state.clearProgress(activeSameGroup);
                 double step = Math.min(WaterborneManager.baseExposureRate(), pendingIncubation);
                 state.addProgress(incubationId, step);
-                active = incubationId;
+                if (incGroup.equals(respGroup)) activeResp = incubationId;
                 if (pendingIncubation - step <= 0.0) state.clearPendingIncubation();
                 else state.setPendingIncubation(pendingIncubation - step, incubationId);
             }
@@ -234,14 +241,14 @@ public class DiseaseEvents {
                 if (ColdSweatCompat.isColdEnoughForDamp(player)) {
                     double worldTemp = ColdSweatCompat.getWorldTemp(player);
                     double rate = ColdSweatCompat.getColdRate(worldTemp) * ImmuneManager.getDampMultiplier(player);
-                    active = accumulate(player, state, rate, active, viralEnvFlag);
+                    activeResp = accumulate(player, state, rate, activeResp, viralEnvFlag, respGroup);
                 }
             } else if (!isDamp && cachedIsInWindchill(player, gameTime)) {
                 if (ColdSweatCompat.isColdEnoughForWindchill(player)) {
                     windRate = WindchillManager.BASE_RATE
                             * WindchillManager.getMitigationFactor(player)
                             * ImmuneManager.getWindchillMultiplier(player);
-                    active = accumulate(player, state, windRate, active, viralEnvFlag);
+                    activeResp = accumulate(player, state, windRate, activeResp, viralEnvFlag, respGroup);
                 }
             }
         }
@@ -249,9 +256,8 @@ public class DiseaseEvents {
         boolean viralEnvAccumulatedThisTick = viralEnvFlag[0];
         tickChillyWindIndicator(player, state, windActive);
 
-        boolean anyActive = active != null
-                || state.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)
-                || state.hasActiveComplication(DiseaseRegistry.GROUP_BACTERIAL)
+        boolean anyActive = activeResp != null || noroInGroup || reservoirActive
+                || state.hasAnyActiveComplication()
                 || state.progress(DiseaseRegistry.CELLULITIS_STAPH) > 0.0
                 || state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH);
 
@@ -272,8 +278,13 @@ public class DiseaseEvents {
             tickExistingDiseases(state, ctx, true);
             tickPotentialComplications(player, state, ctx);
 
-            if (active != null && state.inRecovery(active) && DiseaseRegistry.get(active) instanceof ViralDiseaseDef v) {
+            // Respiratory and GI can both be latched at once now — emit particles for each independently.
+            if (activeResp != null && state.inRecovery(activeResp) && DiseaseRegistry.get(activeResp) instanceof ViralDiseaseDef v) {
                 DiseaseParticleEmitter.tick(player, v.particle().get());
+            }
+            if (state.inRecovery(DiseaseRegistry.NOROVIRUS)
+                    && DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS) instanceof ViralDiseaseDef nv) {
+                DiseaseParticleEmitter.tick(player, nv.particle().get());
             }
         }
 
@@ -313,13 +324,6 @@ public class DiseaseEvents {
         injuryManager.onPlayerDamaged(player, contagionManager.getOrCreate(player), event.getSource(), event.getAmount());
     }
 
-    private ResourceLocation activeViral(PlayerDiseaseState state) {
-        for (DiseaseDef def : DiseaseRegistry.viral()) {
-            if (state.progress(def.id()) > 0 || state.inRecovery(def.id())) return def.id();
-        }
-        return null;
-    }
-
     private void tickExistingDiseases(PlayerDiseaseState state, DiseaseContext ctx, boolean complications) {
         for (DiseaseInstance inst : state.instances()) {
             DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
@@ -333,12 +337,14 @@ public class DiseaseEvents {
         boolean hasBacterialComp = false;
         boolean hasMofComp       = false;
 
-        // Scan existing complications: track which slots are occupied and check for upgrades.
+        // Scan existing complications: track which slots are occupied and check for upgrades. Bucketed
+        // by gate mode (viral vs bacterial trigger), not by exclusion group — the group string no longer
+        // equals the bare pathogen constants under the composite model.
         for (DiseaseDef existingDef : DiseaseRegistry.complications()) {
             DiseaseInstance existing = state.peek(existingDef.id());
             if (existing == null || !hasTickableState(existing)) continue;
-            String group = existingDef.exclusionGroup();
-            if (DiseaseRegistry.GROUP_VIRAL.equals(group)) {
+            if (!(existingDef instanceof ComplicationDiseaseDef cdef)) continue;
+            if (cdef.triggeredBy().isEmpty()) {
                 hasViralComp = true;
                 DiseaseDef upgrade = ComplicationCategory.qualifyingUpgrade(existingDef.id(), state, player);
                 if (upgrade != null) {
@@ -346,7 +352,7 @@ public class DiseaseEvents {
                     upgrade.category().tick(upgrade, inst, ctx);
                     return; // upgrade handles this tick; don't also start fresh complications
                 }
-            } else if (DiseaseRegistry.GROUP_BACTERIAL.equals(group)) {
+            } else {
                 if (existingDef.id().equals(DiseaseRegistry.MOF_STAPH)) {
                     hasMofComp = true;
                 } else {
@@ -426,12 +432,12 @@ public class DiseaseEvents {
     }
 
     private ResourceLocation accumulate(ServerPlayer player, PlayerDiseaseState state, double amount,
-                                        ResourceLocation active, boolean[] viralEnvFlag) {
+                                        ResourceLocation active, boolean[] viralEnvFlag, String respGroup) {
         if (amount <= 0.0) return active;
         long gameTime = player.level().getGameTime();
         if (active != null) {
-            if (!active.equals(DiseaseRegistry.FLU) && !state.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)
-                    && !state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)
+            if (!active.equals(DiseaseRegistry.FLU) && !state.hasActiveComplication(respGroup)
+                    && !state.isGroupImmune(respGroup, gameTime)
                     && canViralTakeHold(state, active, DiseaseRegistry.FLU)
                     && tryFluLockIn(player, state, amount, active, viralEnvFlag)) {
                 return DiseaseRegistry.FLU;
@@ -440,8 +446,9 @@ public class DiseaseEvents {
             viralEnvFlag[0] = true;
             return active;
         }
-        if (state.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime)) return null;
-        if (state.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)) return null;
+        if (state.isGroupImmune(respGroup, gameTime)) return null;
+        if (state.hasActiveComplication(respGroup)) return null;
+        if (!state.canStartNewSlot(respGroup)) return null;
 
         var level             = player.level();
         boolean winter        = SereneSeasonsCompat.isWinter(level);
@@ -554,8 +561,12 @@ public class DiseaseEvents {
         String dampStr = dampEffect != null ? " D" + DAMP_ROMAN[dampEffect.getAmplifier()] : "";
 
         StringBuilder diseaseStr = new StringBuilder();
-        long groupImm = state.groupImmunityUntil(DiseaseRegistry.GROUP_VIRAL) - gameTime;
-        if (groupImm > 0) diseaseStr.append(String.format(" §avIMM§r§7:§e%ds§r", groupImm / 20));
+        // Respiratory-viral and GI-viral immunize independently under the composite exclusion model —
+        // show both windows rather than one blanket "viral" timer.
+        long respGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.COLD).exclusionGroup()) - gameTime;
+        if (respGroupImm > 0) diseaseStr.append(String.format(" §arIMM§r§7:§e%ds§r", respGroupImm / 20));
+        long giGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS).exclusionGroup()) - gameTime;
+        if (giGroupImm > 0) diseaseStr.append(String.format(" §agIMM§r§7:§e%ds§r", giGroupImm / 20));
         for (DiseaseDef def : DiseaseRegistry.viral()) {
             ResourceLocation id = def.id();
             String name = id.getPath();
@@ -569,7 +580,7 @@ public class DiseaseEvents {
 
         StringBuilder complicationStr = new StringBuilder();
         for (DiseaseDef def : DiseaseRegistry.complications()) {
-            if (!DiseaseRegistry.GROUP_VIRAL.equals(def.exclusionGroup())) continue;
+            if (!DiseaseRegistry.GROUP_VIRAL.equals(def.pathogenType())) continue;
             ResourceLocation id = def.id();
             double prog = state.progress(id);
             ResourceLocation src = state.complicationSource(id);
@@ -594,7 +605,7 @@ public class DiseaseEvents {
         }
         if (activeId == null) {
             for (DiseaseDef d : DiseaseRegistry.complications()) {
-                if (DiseaseRegistry.GROUP_VIRAL.equals(d.exclusionGroup()) && state.inRecovery(d.id())) {
+                if (DiseaseRegistry.GROUP_VIRAL.equals(d.pathogenType()) && state.inRecovery(d.id())) {
                     activeId = d.id(); break;
                 }
             }
@@ -638,8 +649,12 @@ public class DiseaseEvents {
         long gameTime = player.level().getGameTime();
 
         StringBuilder bacterialStr = new StringBuilder();
-        long bGroupImm = state.groupImmunityUntil(DiseaseRegistry.GROUP_BACTERIAL) - gameTime;
-        if (bGroupImm > 0) bacterialStr.append(String.format(" §abIMM§r§7:§e%ds§r", bGroupImm / 20));
+        // Tissue-bacterial and systemic-bacterial immunize independently under the composite exclusion
+        // model — show both windows rather than one blanket "bacterial" timer.
+        long tissueGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.CELLULITIS_STAPH).exclusionGroup()) - gameTime;
+        if (tissueGroupImm > 0) bacterialStr.append(String.format(" §atIMM§r§7:§e%ds§r", tissueGroupImm / 20));
+        long systemicGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.SEPSIS_STAPH).exclusionGroup()) - gameTime;
+        if (systemicGroupImm > 0) bacterialStr.append(String.format(" §asIMM§r§7:§e%ds§r", systemicGroupImm / 20));
 
         for (DiseaseDef def : DiseaseRegistry.bacterial()) {
             ResourceLocation id = def.id();
@@ -656,7 +671,7 @@ public class DiseaseEvents {
 
         StringBuilder sepsisStr = new StringBuilder();
         for (DiseaseDef def : DiseaseRegistry.complications()) {
-            if (!DiseaseRegistry.GROUP_BACTERIAL.equals(def.exclusionGroup())) continue;
+            if (!DiseaseRegistry.GROUP_BACTERIAL.equals(def.pathogenType())) continue;
             ResourceLocation id = def.id();
             double prog = state.progress(id);
             ResourceLocation src = state.complicationSource(id);
@@ -680,7 +695,7 @@ public class DiseaseEvents {
         }
         if (activeId == null) {
             for (DiseaseDef d : DiseaseRegistry.complications()) {
-                if (DiseaseRegistry.GROUP_BACTERIAL.equals(d.exclusionGroup()) && state.inRecovery(d.id())) {
+                if (DiseaseRegistry.GROUP_BACTERIAL.equals(d.pathogenType()) && state.inRecovery(d.id())) {
                     activeId = d.id(); break;
                 }
             }

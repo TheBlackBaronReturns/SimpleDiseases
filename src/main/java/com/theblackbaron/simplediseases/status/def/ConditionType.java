@@ -1,11 +1,15 @@
 package com.theblackbaron.simplediseases.status.def;
 
+import com.mojang.serialization.Codec;
 import com.theblackbaron.simplediseases.SimpleDiseases;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.Optional;
+import java.util.Locale;
 
-/** Organ/system target shown under the disease effect name in tooltips. */
+/**
+ * Organ/system a disease affects — shown under the disease effect name in tooltips, and one half of
+ * the {@link DiseaseDef#exclusionGroup()} composite key (paired with {@link DiseaseDef#pathogenType()}).
+ */
 public enum ConditionType {
     RESPIRATORY("simplediseases.condition.respiratory", "base_textures/respiratory_base"),
     GI("simplediseases.condition.gi", "base_textures/stomach_base"),
@@ -28,13 +32,9 @@ public enum ConditionType {
         return ResourceLocation.fromNamespaceAndPath(SimpleDiseases.MOD_ID, "textures/mob_effect/" + texturePath + ".png");
     }
 
-    public static Optional<ConditionType> forDisease(ResourceLocation diseaseId) {
-        return switch (diseaseId.getPath()) {
-            case "cold", "flu", "rsv", "pneumonia", "bronchitis" -> Optional.of(RESPIRATORY);
-            case "norovirus" -> Optional.of(GI);
-            case "cellulitis_staph" -> Optional.of(TISSUE);
-            case "sepsis_staph", "mof_staph" -> Optional.of(SYSTEMIC);
-            default -> Optional.empty();
-        };
-    }
+    /** Serializes by lowercase name (e.g. "respiratory") — mirrors {@link Severity#CODEC}. */
+    public static final Codec<ConditionType> CODEC =
+            Codec.STRING.xmap(s -> valueOf(s.toUpperCase(Locale.ROOT)), ConditionType::id);
+
+    public String id() { return name().toLowerCase(Locale.ROOT); }
 }

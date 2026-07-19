@@ -1,5 +1,6 @@
 package com.theblackbaron.simplediseases.status.def;
 
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -40,7 +41,8 @@ import java.util.Optional;
 public record ComplicationDiseaseDef(
     ResourceLocation   id,
     int                tierCount,
-    String             exclusionGroup,
+    ConditionType      organGroup,
+    String             pathogenType,
     double             progressCap,
     double             latchThreshold,
     long               minLatchTicks,
@@ -89,14 +91,17 @@ public record ComplicationDiseaseDef(
         return tiers().get(0);
     }
 
+    // 17 logical fields exceeds RecordCodecBuilder's 16-arg group() limit, so min/max latch ticks —
+    // already a natural pair — are packed into one mapPair slot and unpacked in the apply lambda below.
     public static final MapCodec<ComplicationDiseaseDef> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
         ResourceLocation.CODEC.fieldOf("id").forGetter(ComplicationDiseaseDef::id),
         Codec.INT.fieldOf("tier_count").forGetter(ComplicationDiseaseDef::tierCount),
-        Codec.STRING.fieldOf("exclusion_group").forGetter(ComplicationDiseaseDef::exclusionGroup),
+        ConditionType.CODEC.fieldOf("organ_group").forGetter(ComplicationDiseaseDef::organGroup),
+        Codec.STRING.fieldOf("pathogen_type").forGetter(ComplicationDiseaseDef::pathogenType),
         Codec.DOUBLE.fieldOf("progress_cap").forGetter(ComplicationDiseaseDef::progressCap),
         Codec.DOUBLE.fieldOf("latch_threshold").forGetter(ComplicationDiseaseDef::latchThreshold),
-        Codec.LONG.fieldOf("min_latch_ticks").forGetter(ComplicationDiseaseDef::minLatchTicks),
-        Codec.LONG.fieldOf("max_latch_ticks").forGetter(ComplicationDiseaseDef::maxLatchTicks),
+        Codec.mapPair(Codec.LONG.fieldOf("min_latch_ticks"), Codec.LONG.fieldOf("max_latch_ticks"))
+            .forGetter(cdef -> Pair.of(cdef.minLatchTicks(), cdef.maxLatchTicks())),
         SymptomConfig.CODEC.fieldOf("symptoms").forGetter(ComplicationDiseaseDef::symptoms),
         Codec.STRING.fieldOf("caught_message").forGetter(ComplicationDiseaseDef::caughtKey),
         Codec.STRING.fieldOf("cured_message").forGetter(ComplicationDiseaseDef::curedKey),
@@ -106,5 +111,10 @@ public record ComplicationDiseaseDef(
         Codec.DOUBLE.optionalFieldOf("passive_recovery_rate").forGetter(ComplicationDiseaseDef::passiveRecoveryRate),
         Codec.DOUBLE.optionalFieldOf("worsening_rate", 0.0).forGetter(ComplicationDiseaseDef::worseningRate),
         Codec.DOUBLE.listOf().optionalFieldOf("worsening_thresholds", List.of()).forGetter(ComplicationDiseaseDef::worseningThresholds)
-    ).apply(i, ComplicationDiseaseDef::new));
+    ).apply(i, (id, tierCount, organGroup, pathogenType, progressCap, latchThreshold, latchTicks, symptoms,
+                caughtKey, curedKey, triggeredBy, decayRate, accumulationRate, passiveRecoveryRate,
+                worseningRate, worseningThresholds) ->
+        new ComplicationDiseaseDef(id, tierCount, organGroup, pathogenType, progressCap, latchThreshold,
+                latchTicks.getFirst(), latchTicks.getSecond(), symptoms, caughtKey, curedKey, triggeredBy,
+                decayRate, accumulationRate, passiveRecoveryRate, worseningRate, worseningThresholds)));
 }

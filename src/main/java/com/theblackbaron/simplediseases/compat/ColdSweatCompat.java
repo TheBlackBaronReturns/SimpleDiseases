@@ -196,13 +196,13 @@ public class ColdSweatCompat {
     }
 
     /**
-     * Passive recovery rate multiplier for diseases in the given exclusion group.
+     * Passive recovery rate multiplier for diseases of the given pathogen type.
      * Returns {@code 0.0} while environmental damp/wind is adding viral progress this tick.
      */
-    public static double getRecoveryMultiplier(ServerPlayer player, String exclusionGroup,
+    public static double getRecoveryMultiplier(ServerPlayer player, String pathogenType,
                                                boolean environmentalAccumulating) {
         if (environmentalAccumulating) return 0.0;
-        double minWarmth = minRecoveryWarmth(exclusionGroup);
+        double minWarmth = minRecoveryWarmth(pathogenType);
         double threshold = minWarmth + feverOffset(player);
         double warmth = getObjectiveRecoveryWarmth(player);
         if (warmth >= threshold) return 1.0;
@@ -213,18 +213,18 @@ public class ColdSweatCompat {
         return SUPPRESSED_RECOVERY_MIN + (1.0 - SUPPRESSED_RECOVERY_MIN) * t;
     }
 
-    private static double minRecoveryWarmth(String exclusionGroup) {
-        return DiseaseRegistry.GROUP_BACTERIAL.equals(exclusionGroup)
+    private static double minRecoveryWarmth(String pathogenType) {
+        return DiseaseRegistry.GROUP_BACTERIAL.equals(pathogenType)
                 ? MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL : MIN_WORLD_TEMP_TO_RECOVER;
     }
 
     /**
-     * Whether the player is warm enough for diseases in the given exclusion group to passively recover.
+     * Whether the player is warm enough for diseases of the given pathogen type to passively recover.
      * Viral uses {@link #MIN_WORLD_TEMP_TO_RECOVER}; bacterial uses {@link #MIN_WORLD_TEMP_TO_RECOVER_BACTERIAL}.
      * Both apply full fever offset on top of their respective base.
      */
-    public static boolean isWarmEnoughForRecovery(ServerPlayer player, String exclusionGroup) {
-        return getRecoveryMultiplier(player, exclusionGroup, false) >= 1.0;
+    public static boolean isWarmEnoughForRecovery(ServerPlayer player, String pathogenType) {
+        return getRecoveryMultiplier(player, pathogenType, false) >= 1.0;
     }
 
     /**

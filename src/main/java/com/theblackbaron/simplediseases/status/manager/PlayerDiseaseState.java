@@ -18,7 +18,9 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Centralized per-player disease state. Shared player-level environment (wetness, transient
@@ -204,7 +206,10 @@ public class PlayerDiseaseState {
     /** Whether the player currently has any active (developing or latched) complication-category disease
      *  in the given exclusion group — pneumonia today, any future complication tomorrow. A complication
      *  occupies its group while active, so fresh acquisition of group members must be blocked. Generic
-     *  over {@link DiseaseRegistry#complications()} rather than hardcoding pneumonia. */
+     *  over {@link DiseaseRegistry#complications()} rather than hardcoding pneumonia. {@code group} must
+     *  be a composite {@link DiseaseDef#exclusionGroup()} value (e.g. "respiratory_viral"), never a bare
+     *  pathogen constant ({@link DiseaseRegistry#GROUP_VIRAL}/{@link DiseaseRegistry#GROUP_BACTERIAL}) —
+     *  those no longer match any def's exclusion group. */
     public boolean hasActiveComplication(String group) {
         for (DiseaseDef def : DiseaseRegistry.complications()) {
             if (group.equals(def.exclusionGroup())
@@ -213,6 +218,45 @@ public class PlayerDiseaseState {
             }
         }
         return false;
+    }
+
+    /** Whether ANY complication-category disease is active, regardless of exclusion group. Used for
+     *  cheap per-tick gates that don't care which organ/pathogen — see {@link DiseaseRegistry#complications()}. */
+    public boolean hasAnyActiveComplication() {
+        for (DiseaseDef def : DiseaseRegistry.complications()) {
+            if (progress(def.id()) > 0.0 || inRecovery(def.id())) return true;
+        }
+        return false;
+    }
+
+    /** Distinct composite exclusion groups currently occupied — progressing or latched — across every
+     *  disease category. Used by {@link #canStartNewSlot} to enforce the global concurrent-illness cap. */
+    public Set<String> activeSlots() {
+        Set<String> slots = new HashSet<>();
+        for (DiseaseInstance inst : diseases.values()) {
+            DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
+            if (def == null) continue;
+            if (progress(def.id()) > 0.0 || inRecovery(def.id())) slots.add(def.exclusionGroup());
+        }
+        return slots;
+    }
+
+    /** Whether a fresh illness in {@code group} may begin: either that slot is already occupied (so this
+     *  isn't a new one) or fewer than {@link DiseaseRegistry#MAX_CONCURRENT_SLOTS} are currently occupied. */
+    public boolean canStartNewSlot(String group) {
+        Set<String> slots = activeSlots();
+        return slots.contains(group) || slots.size() < DiseaseRegistry.MAX_CONCURRENT_SLOTS;
+    }
+
+    /** The disease occupying composite exclusion {@code group} that's currently in progress (pre-latch
+     *  or latched), or null. Scoped to one organ+pathogen slot rather than "any disease" — under the
+     *  composite exclusion model, multiple slots can be simultaneously active for one player. */
+    public ResourceLocation activeInGroup(String group) {
+        for (DiseaseInstance inst : diseases.values()) {
+            DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
+            if (def != null && group.equals(def.exclusionGroup()) && progress(def.id()) > 0.0) return def.id();
+        }
+        return null;
     }
 
     /** The source disease of a viral complication (pneumonia) on this player, or null if it has none. */

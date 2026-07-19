@@ -275,8 +275,13 @@ public final class ContagionManager {
         long gameTime = player.level().getGameTime();
         if (gameTime % 100 != player.getId() % 100) return;
 
-        boolean groupImmune = data.isGroupImmune(DiseaseRegistry.GROUP_VIRAL, gameTime);
-        if (groupImmune && !isPlayerInfectious(player, data)) return;
+        // Per-channel, not a blanket pathogen-wide flag: immunity is now organ+pathogen scoped, so a
+        // player immune to one contact-contagious group may still be susceptible to another.
+        boolean anySusceptible = false;
+        for (Channel ch : channels.values()) {
+            if (ch.contactContagious() && !data.isGroupImmune(ch.group, gameTime)) { anySusceptible = true; break; }
+        }
+        if (!anySusceptible && !isPlayerInfectious(player, data)) return;
 
         // The disease (if any) the player is in infectious contact with AND susceptible to this check —
         // drives contact incubation below. Stays null when nothing relevant is in range.
@@ -289,12 +294,11 @@ public final class ContagionManager {
             List<Villager> nearbyVillagers = player.level().getEntitiesOfClass(
                 Villager.class, box, v -> true);
             if (!nearbyPlayers.isEmpty() || !nearbyVillagers.isEmpty()) {
-                ResourceLocation activeViral = activeViralOf(data);
                 for (ServerPlayer target : nearbyPlayers) {
-                    contactDisease = processContactTarget(player, data, target, gameTime, activeViral, groupImmune, contactDisease);
+                    contactDisease = processContactTarget(player, data, target, gameTime, contactDisease);
                 }
                 for (Villager target : nearbyVillagers) {
-                    contactDisease = processContactTarget(player, data, target, gameTime, activeViral, groupImmune, contactDisease);
+                    contactDisease = processContactTarget(player, data, target, gameTime, contactDisease);
                 }
             }
         }
@@ -303,17 +307,16 @@ public final class ContagionManager {
     }
 
     private boolean isPlayerInfectious(ServerPlayer player, PlayerDiseaseState data) {
-        if (data.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)) return true;
         for (Channel ch : channels.values()) {
             ResourceLocation id = ch.def.id();
-            if (data.progress(id) > 0.0 || data.inRecovery(id) || ch.has(player)) return true;
+            if (data.progress(id) > 0.0 || data.inRecovery(id) || ch.has(player)
+                    || data.hasActiveComplication(ch.group)) return true;
         }
         return false;
     }
 
     private ResourceLocation processContactTarget(ServerPlayer player, PlayerDiseaseState data, LivingEntity target,
-                                                  long gameTime, ResourceLocation activeViral,
-                                                  boolean groupImmune, ResourceLocation contactDisease) {
+                                                  long gameTime, ResourceLocation contactDisease) {
         for (Channel ch : channels.values()) {
             ResourceLocation id = ch.def.id();
             // A latched complication spreads the disease that caused it, even though the player
@@ -341,29 +344,23 @@ public final class ContagionManager {
             }
 
             // --- Unified contact-incubation detection (receiver side; covers player/villager contact) ---
-            if (contactDisease == null && !groupImmune && ch.contactContagious()
-                    && susceptibleToContact(data, activeViral, id)
+            if (contactDisease == null && !data.isGroupImmune(ch.group, gameTime) && ch.contactContagious()
+                    && susceptibleToContact(data, id, ch.group)
                     && isInfectiousContactSource(target, ch, id)) {
                 contactDisease = id;
             }
         }
         return contactDisease;
     }
-    /** The single viral disease in progress on the player (mutual exclusion ⇒ ≤1), or null. */
-    private ResourceLocation activeViralOf(PlayerDiseaseState data) {
-        for (Channel ch : channels.values()) {
-            if (data.progress(ch.def.id()) > 0.0) return ch.def.id();
-        }
-        return null;
-    }
 
     /** Whether the player can receive a fresh contact incubation of {@code id}: not already latched with it, not
-     *  occupied by an active viral complication (pneumonia, …), and either nothing else viral is in
-     *  progress or only a still-switchable sub-threshold one. */
-    private boolean susceptibleToContact(PlayerDiseaseState data, ResourceLocation activeViral, ResourceLocation id) {
+     *  occupied by an active complication in the same group (pneumonia, …), and either nothing else in the
+     *  group is in progress or only a still-switchable sub-threshold rival. */
+    private boolean susceptibleToContact(PlayerDiseaseState data, ResourceLocation id, String group) {
         if (data.inRecovery(id)) return false;
-        if (data.hasActiveComplication(DiseaseRegistry.GROUP_VIRAL)) return false;
-        return activeViral == null || activeViral.equals(id) || data.progress(activeViral) < NULLIFY_THRESHOLD;
+        if (data.hasActiveComplication(group)) return false;
+        ResourceLocation rival = data.activeInGroup(group);
+        return rival == null || rival.equals(id) || data.progress(rival) < NULLIFY_THRESHOLD;
     }
 
     /** Whether {@code target} is an infectious source of {@code id} from a receiver's view — a latched
@@ -385,7 +382,8 @@ public final class ContagionManager {
      *  exposure without adding per-tick proximity work. */
     private void handleContactIncubation(ServerPlayer player, PlayerDiseaseState data, ResourceLocation contactDisease, long gameTime) {
         if (contactDisease != null && data.getPendingIncubation() <= 0.0
-                && DiseaseRegistry.get(contactDisease) instanceof ViralDiseaseDef vdef) {
+                && DiseaseRegistry.get(contactDisease) instanceof ViralDiseaseDef vdef
+                && data.canStartNewSlot(vdef.exclusionGroup())) {
             data.setPendingIncubation(vdef.rollIncubation(player.getRandom(), ImmuneManager.isImmunodeficient(player)), contactDisease);
         }
     }
@@ -498,7 +496,7 @@ public final class ContagionManager {
         inf.generation    = generation;
         inf.transmissions = 0;
         // Unified cross-disease window: effect duration + the shared post-recovery immunity (mirrors a
-        // player getting GROUP_VIRAL immunity on recovery). Blocks catching ANY group member meanwhile.
+        // player getting exclusion-group immunity on recovery). Blocks catching ANY group member meanwhile.
         grantVillagerGroupImmunity(vid, ch.group, now + ch.c().villagerEffectTicks() + DiseaseRegistry.VIRAL_IMMUNITY_TICKS);
     }
 

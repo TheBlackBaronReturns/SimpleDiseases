@@ -9,7 +9,6 @@ import com.theblackbaron.simplediseases.status.component.DiseaseInstance;
 import com.theblackbaron.simplediseases.status.component.SymptomPoolComponent;
 import com.theblackbaron.simplediseases.status.def.BacterialDiseaseDef;
 import com.theblackbaron.simplediseases.status.def.ComplicationDiseaseDef;
-import com.theblackbaron.simplediseases.status.def.ConditionType;
 import com.theblackbaron.simplediseases.status.def.DiseaseDef;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import com.theblackbaron.simplediseases.status.def.Severity;
@@ -108,9 +107,9 @@ public final class DiseaseTooltipHelper {
         if (list.isEmpty()) return;
         Optional<ResourceLocation> diseaseId = diseaseIdForEffect(effect);
         if (diseaseId.isEmpty()) return;
-        Optional<ConditionType> condition = ConditionType.forDisease(diseaseId.get());
-        if (condition.isEmpty()) return;
-        list.add(1, Component.translatable(condition.get().langKey()).withStyle(ChatFormatting.GRAY));
+        DiseaseDef def = DiseaseRegistry.get(diseaseId.get());
+        if (def == null) return;
+        list.add(1, Component.translatable(def.organGroup().langKey()).withStyle(ChatFormatting.GRAY));
     }
 
     /** Removes JEED effect-color and category rows (harmful / beneficial / neutral). */

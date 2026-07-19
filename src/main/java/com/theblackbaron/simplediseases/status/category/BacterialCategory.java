@@ -129,7 +129,7 @@ public final class BacterialCategory implements DiseaseCategory {
         }
 
         if (inCapRecovery) {
-            double mult = ctx.recoveryMultiplier(bdef.exclusionGroup());
+            double mult = ctx.recoveryMultiplier(bdef.pathogenType());
             if (mult > 0.0) {
                 prog.add(-bdef.recoveryRate() * mult, bdef.progressCap());
             }

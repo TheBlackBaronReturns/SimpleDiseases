@@ -25,7 +25,8 @@ import java.util.function.Supplier;
 public record BacterialDiseaseDef(
     ResourceLocation id,
     int              tierCount,
-    String           exclusionGroup,
+    ConditionType    organGroup,
+    String           pathogenType,
     double           progressCap,
     double           latchThreshold,
     double           accumulationRate,
@@ -61,7 +62,8 @@ public record BacterialDiseaseDef(
     public static final MapCodec<BacterialDiseaseDef> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
         ResourceLocation.CODEC.fieldOf("id").forGetter(BacterialDiseaseDef::id),
         Codec.INT.fieldOf("tier_count").forGetter(BacterialDiseaseDef::tierCount),
-        Codec.STRING.fieldOf("exclusion_group").forGetter(BacterialDiseaseDef::exclusionGroup),
+        ConditionType.CODEC.fieldOf("organ_group").forGetter(BacterialDiseaseDef::organGroup),
+        Codec.STRING.fieldOf("pathogen_type").forGetter(BacterialDiseaseDef::pathogenType),
         Codec.DOUBLE.fieldOf("progress_cap").forGetter(BacterialDiseaseDef::progressCap),
         Codec.DOUBLE.fieldOf("latch_threshold").forGetter(BacterialDiseaseDef::latchThreshold),
         Codec.DOUBLE.fieldOf("accumulation_rate").forGetter(BacterialDiseaseDef::accumulationRate),

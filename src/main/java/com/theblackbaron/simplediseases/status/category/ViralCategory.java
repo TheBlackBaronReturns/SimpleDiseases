@@ -69,7 +69,7 @@ public final class ViralCategory implements DiseaseCategory {
         TierComponent        tier     = instance.get(Components.TIER);
 
         // Passive recovery — scaled by warmth/fever; zero while damp/wind adds progress this tick.
-        double mult = ctx.recoveryMultiplier(vdef.exclusionGroup());
+        double mult = ctx.recoveryMultiplier(vdef.pathogenType());
         if (mult > 0.0) {
             prog.add(-vdef.recoveryRate() * mult, vdef.progressCap());
         }

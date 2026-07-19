@@ -30,13 +30,13 @@ public record DiseaseContext(
     PlayerDiseaseState        state,
     Set<ResourceLocation>     suppressedEpisodeSources
 ) {
-    public double recoveryMultiplier(String exclusionGroup) {
-        return DiseaseRegistry.GROUP_BACTERIAL.equals(exclusionGroup)
+    public double recoveryMultiplier(String pathogenType) {
+        return DiseaseRegistry.GROUP_BACTERIAL.equals(pathogenType)
                 ? bacterialRecoveryMultiplier : viralRecoveryMultiplier;
     }
 
-    public boolean worsensComplication(String exclusionGroup) {
-        return complicationWorseningGroup != null && complicationWorseningGroup.equals(exclusionGroup);
+    public boolean worsensComplication(String pathogenType) {
+        return complicationWorseningGroup != null && complicationWorseningGroup.equals(pathogenType);
     }
 
     /** Returns true if the given source disease's episodes should be suppressed this tick. */

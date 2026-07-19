@@ -18,8 +18,20 @@ public interface DiseaseDef {
 
     ResourceLocation id();
 
-    /** Diseases sharing an exclusion group can't be active simultaneously (cold and flu: respiratory). */
-    String exclusionGroup();
+    /** Organ system this disease affects (respiratory/GI/tissue/systemic) — half of the exclusion key. */
+    ConditionType organGroup();
+
+    /** Pathogen biology ("viral"/"bacterial", {@link DiseaseRegistry#GROUP_VIRAL}/{@link DiseaseRegistry#GROUP_BACTERIAL}).
+     *  Drives ColdSweat recovery-warmth thresholds, the environmental complication-worsening gate, and
+     *  debug-panel bucketing — NOT mutual exclusion. Use {@link #exclusionGroup()} for that. */
+    String pathogenType();
+
+    /** Composite mutual-exclusion / immunity-window key: two diseases only exclude each other (and only
+     *  share a post-recovery immunity window) when they match on BOTH organ and pathogen. Derived, not
+     *  stored, so it can never disagree with {@link #organGroup()}/{@link #pathogenType()}. */
+    default String exclusionGroup() {
+        return organGroup().id() + "_" + pathogenType();
+    }
 
     String caughtKey();
 

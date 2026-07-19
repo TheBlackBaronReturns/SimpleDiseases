@@ -76,7 +76,7 @@ public final class ComplicationCategory implements DiseaseCategory {
         SourceComponent        src       = instance.get(Components.SOURCE);
         TierComponent          tier      = instance.get(Components.TIER);
 
-        boolean worseningConditions = ctx.worsensComplication(cdef.exclusionGroup());
+        boolean worseningConditions = ctx.worsensComplication(cdef.pathogenType());
 
         if (!prog.inRecovery) {
             tickPreLatch(cdef, prog, pool, src, tier, player, state, gameTime, instance);
@@ -171,7 +171,7 @@ public final class ComplicationCategory implements DiseaseCategory {
             if (worseningConditions) {
                 prog.add(accumRate(player, src), cdef.progressCap());
             } else {
-                double mult = ctx.recoveryMultiplier(cdef.exclusionGroup());
+                double mult = ctx.recoveryMultiplier(cdef.pathogenType());
                 if (mult > 0.0) {
                     double recovRate = effectiveRecoveryRate(cdef, src);
                     prog.add(-recovRate * mult, cdef.progressCap());
