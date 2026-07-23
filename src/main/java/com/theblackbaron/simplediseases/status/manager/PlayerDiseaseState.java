@@ -18,9 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Centralized per-player disease state. Shared player-level environment (wetness, transient
@@ -229,23 +227,38 @@ public class PlayerDiseaseState {
         return false;
     }
 
-    /** Distinct composite exclusion groups currently occupied — progressing or latched — across every
-     *  disease category. Used by {@link #canStartNewSlot} to enforce the global concurrent-illness cap. */
-    public Set<String> activeSlots() {
-        Set<String> slots = new HashSet<>();
+    /** Count of individual diseases currently occupying the concurrent-illness budget. Primary diseases
+     *  count while progressing or latched, same as always. Complications (pneumonia, bronchitis, sepsis,
+     *  MOF) only start counting once latched — pre-latch they're still just a symptom of their still-counted
+     *  source (see {@code ComplicationCategory#latch}, which absorbs/clears the source at the same moment
+     *  {@code inRecovery} flips true), so counting them earlier would double-count one illness as two.
+     *  Once latched, the source is gone and the complication itself occupies the slot going forward. */
+    public int activeDiseaseCount() {
+        int count = 0;
         for (DiseaseInstance inst : diseases.values()) {
             DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
             if (def == null) continue;
-            if (progress(def.id()) > 0.0 || inRecovery(def.id())) slots.add(def.exclusionGroup());
+            boolean counts = def instanceof ComplicationDiseaseDef
+                    ? inRecovery(def.id())
+                    : progress(def.id()) > 0.0 || inRecovery(def.id());
+            if (counts) count++;
         }
-        return slots;
+        return count;
     }
 
-    /** Whether a fresh illness in {@code group} may begin: either that slot is already occupied (so this
-     *  isn't a new one) or fewer than {@link DiseaseRegistry#MAX_CONCURRENT_SLOTS} are currently occupied. */
-    public boolean canStartNewSlot(String group) {
-        Set<String> slots = activeSlots();
-        return slots.contains(group) || slots.size() < DiseaseRegistry.MAX_CONCURRENT_SLOTS;
+    /** Whether an entirely new illness may begin: fewer than {@link DiseaseRegistry#MAX_CONCURRENT_DISEASES}
+     *  primary diseases currently occupy the budget. Use when the caller already knows nothing existing
+     *  applies (e.g. no disease active yet in this organ system). */
+    public boolean canStartNewDisease() {
+        return activeDiseaseCount() < DiseaseRegistry.MAX_CONCURRENT_DISEASES;
+    }
+
+    /** Whether a fresh case of {@code id} may begin: already active (continuing, not new) or room under
+     *  the cap. Complications must never call this — they're exempt by construction (see
+     *  {@link #activeDiseaseCount()}), never gated by the budget at all. */
+    public boolean canStartNewDisease(ResourceLocation id) {
+        if (progress(id) > 0.0 || inRecovery(id)) return true;
+        return canStartNewDisease();
     }
 
     /** The disease occupying composite exclusion {@code group} that's currently in progress (pre-latch

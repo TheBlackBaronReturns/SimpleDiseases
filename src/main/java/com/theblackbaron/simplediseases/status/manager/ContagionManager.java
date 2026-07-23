@@ -383,7 +383,7 @@ public final class ContagionManager {
     private void handleContactIncubation(ServerPlayer player, PlayerDiseaseState data, ResourceLocation contactDisease, long gameTime) {
         if (contactDisease != null && data.getPendingIncubation() <= 0.0
                 && DiseaseRegistry.get(contactDisease) instanceof ViralDiseaseDef vdef
-                && data.canStartNewSlot(vdef.exclusionGroup())) {
+                && data.canStartNewDisease(contactDisease)) {
             data.setPendingIncubation(vdef.rollIncubation(player.getRandom(), ImmuneManager.isImmunodeficient(player)), contactDisease);
         }
     }

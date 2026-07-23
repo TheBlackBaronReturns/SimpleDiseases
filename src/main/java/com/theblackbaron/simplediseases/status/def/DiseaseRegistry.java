@@ -32,8 +32,10 @@ public final class DiseaseRegistry {
 
     public static final long VIRAL_IMMUNITY_TICKS = 20L * 60 * 20; // 20 minutes
 
-    /** Max distinct composite exclusion groups (organ+pathogen) a player may have occupied at once. */
-    public static final int MAX_CONCURRENT_SLOTS = 3;
+    /** Max individual diseases a player may have active at once. Complications (pneumonia, bronchitis,
+     *  sepsis, MOF) only count once latched, not while still pre-latch accumulating — see
+     *  {@link com.theblackbaron.simplediseases.status.manager.PlayerDiseaseState#activeDiseaseCount()}. */
+    public static final int MAX_CONCURRENT_DISEASES = 3;
 
     private static final Map<ResourceLocation, DiseaseDef> BY_ID = new LinkedHashMap<>();
 

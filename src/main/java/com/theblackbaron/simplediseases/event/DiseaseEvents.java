@@ -87,6 +87,15 @@ public class DiseaseEvents {
     private final Map<UUID, Integer>            lastBloodyCoughDuration     = new HashMap<>();
     private final Map<UUID, Integer>            lastProductiveCoughDuration = new HashMap<>();
 
+    // Composite exclusion-group keys, resolved once here rather than every tick: DiseaseDef#exclusionGroup()
+    // is derived (concatenates organGroup + pathogenType) and allocates on each call. Safe to eagerly
+    // resolve at construction because SimpleDiseases's constructor always calls DiseaseRegistry.bootstrap()
+    // before `new DiseaseEvents()`.
+    private final String respGroup     = DiseaseRegistry.get(DiseaseRegistry.FLU).exclusionGroup();
+    private final String noroGroup     = DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS).exclusionGroup();
+    private final String tissueGroup   = DiseaseRegistry.get(DiseaseRegistry.CELLULITIS_STAPH).exclusionGroup();
+    private final String systemicGroup = DiseaseRegistry.get(DiseaseRegistry.SEPSIS_STAPH).exclusionGroup();
+
     public ContagionManager  getContagionManager()       { return contagionManager; }
     public FluSeasonManager  getFluSeasonManager()        { return fluSeasonManager; }
     public Set<UUID>         getDebugViralPlayers()       { return debugViralPlayers; }
@@ -172,12 +181,6 @@ public class DiseaseEvents {
         tickCoughParticles(player, gameTime);
         boolean isDamp = player.hasEffect(DiseaseEffects.DAMP.get());
 
-        // Composite exclusion groups for the two organs handled directly in this method (respiratory:
-        // damp/wind + contact incubation; GI: reservoir/puddle norovirus). Cheap map lookups, computed
-        // once per tick rather than per-check.
-        String respGroup = DiseaseRegistry.get(DiseaseRegistry.FLU).exclusionGroup();
-        String noroGroup  = DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS).exclusionGroup();
-
         boolean reservoirActive = false;
         boolean inReservoir = WaterborneManager.isInInfectedWater(player, state, gameTime);
         boolean noroLatched  = state.inRecovery(DiseaseRegistry.NOROVIRUS);
@@ -191,7 +194,7 @@ public class DiseaseEvents {
         boolean noroInGroup = state.progress(DiseaseRegistry.NOROVIRUS) > 0.0 || noroLatched;
         boolean noroEligible = !state.isGroupImmune(noroGroup, gameTime)
                 && !state.hasActiveComplication(noroGroup)
-                && (noroInGroup || state.canStartNewSlot(noroGroup));
+                && state.canStartNewDisease(DiseaseRegistry.NOROVIRUS);
         if ((inReservoir || inLingering) && noroEligible) {
             double base = inReservoir ? WaterborneManager.exposureRate(player) : 0.0;
             if (inLingering) base = Math.max(base, WaterborneManager.submergedRate());
@@ -448,7 +451,7 @@ public class DiseaseEvents {
         }
         if (state.isGroupImmune(respGroup, gameTime)) return null;
         if (state.hasActiveComplication(respGroup)) return null;
-        if (!state.canStartNewSlot(respGroup)) return null;
+        if (!state.canStartNewDisease()) return null;
 
         var level             = player.level();
         boolean winter        = SereneSeasonsCompat.isWinter(level);
@@ -563,9 +566,9 @@ public class DiseaseEvents {
         StringBuilder diseaseStr = new StringBuilder();
         // Respiratory-viral and GI-viral immunize independently under the composite exclusion model —
         // show both windows rather than one blanket "viral" timer.
-        long respGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.COLD).exclusionGroup()) - gameTime;
+        long respGroupImm = state.groupImmunityUntil(respGroup) - gameTime;
         if (respGroupImm > 0) diseaseStr.append(String.format(" §arIMM§r§7:§e%ds§r", respGroupImm / 20));
-        long giGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.NOROVIRUS).exclusionGroup()) - gameTime;
+        long giGroupImm = state.groupImmunityUntil(noroGroup) - gameTime;
         if (giGroupImm > 0) diseaseStr.append(String.format(" §agIMM§r§7:§e%ds§r", giGroupImm / 20));
         for (DiseaseDef def : DiseaseRegistry.viral()) {
             ResourceLocation id = def.id();
@@ -651,9 +654,9 @@ public class DiseaseEvents {
         StringBuilder bacterialStr = new StringBuilder();
         // Tissue-bacterial and systemic-bacterial immunize independently under the composite exclusion
         // model — show both windows rather than one blanket "bacterial" timer.
-        long tissueGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.CELLULITIS_STAPH).exclusionGroup()) - gameTime;
+        long tissueGroupImm = state.groupImmunityUntil(tissueGroup) - gameTime;
         if (tissueGroupImm > 0) bacterialStr.append(String.format(" §atIMM§r§7:§e%ds§r", tissueGroupImm / 20));
-        long systemicGroupImm = state.groupImmunityUntil(DiseaseRegistry.get(DiseaseRegistry.SEPSIS_STAPH).exclusionGroup()) - gameTime;
+        long systemicGroupImm = state.groupImmunityUntil(systemicGroup) - gameTime;
         if (systemicGroupImm > 0) bacterialStr.append(String.format(" §asIMM§r§7:§e%ds§r", systemicGroupImm / 20));
 
         for (DiseaseDef def : DiseaseRegistry.bacterial()) {

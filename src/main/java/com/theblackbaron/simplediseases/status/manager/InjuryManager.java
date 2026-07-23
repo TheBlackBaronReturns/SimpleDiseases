@@ -62,7 +62,7 @@ public final class InjuryManager {
         if (woundSeverity >= 0 && gameTime % 20 == 0
                 && state.progress(DiseaseRegistry.CELLULITIS_STAPH) <= 0.0
                 && !state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH)
-                && state.canStartNewSlot(DiseaseRegistry.get(DiseaseRegistry.CELLULITIS_STAPH).exclusionGroup())) {
+                && state.canStartNewDisease(DiseaseRegistry.CELLULITIS_STAPH)) {
             double[] rates = infectionRates(player);
             if (player.getRandom().nextDouble() < rates[woundSeverity]) {
                 double seed = INFECTION_SEED_MIN + player.getRandom().nextDouble() * (INFECTION_SEED_MAX - INFECTION_SEED_MIN);
