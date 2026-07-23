@@ -264,12 +264,18 @@ public class DiseaseEvents {
                 || state.progress(DiseaseRegistry.CELLULITIS_STAPH) > 0.0
                 || state.inRecovery(DiseaseRegistry.CELLULITIS_STAPH);
 
-        double viralRecoveryMult = ColdSweatCompat.getRecoveryMultiplier(
-                player, DiseaseRegistry.GROUP_VIRAL, viralEnvAccumulatedThisTick);
-        double bacterialRecoveryMult = ColdSweatCompat.getRecoveryMultiplier(
-                player, DiseaseRegistry.GROUP_BACTERIAL, false);
+        // Recovery multipliers walk the Cold Sweat warmth chain (world temp, insulation, waterskin
+        // inventory scan) — real cost when CS is loaded. Only computed when something's actually
+        // active; the debug overlay below recomputes on its own rare cadence if nothing is.
+        double viralRecoveryMult = 0.0;
+        double bacterialRecoveryMult = 0.0;
 
         if (anyActive) {
+            viralRecoveryMult = ColdSweatCompat.getRecoveryMultiplier(
+                    player, DiseaseRegistry.GROUP_VIRAL, viralEnvAccumulatedThisTick);
+            bacterialRecoveryMult = ColdSweatCompat.getRecoveryMultiplier(
+                    player, DiseaseRegistry.GROUP_BACTERIAL, false);
+
             String complicationWorseningGroup = (isDamp || windActive) ? DiseaseRegistry.GROUP_VIRAL : null;
 
             buildSuppressedEpisodeSources(state, suppressedEpisodeSourcesCache);
@@ -308,12 +314,17 @@ public class DiseaseEvents {
                 List<String> bacterialLines = List.of();
                 if (viralDbg) {
                     mask |= DebugOverlayPacket.UPDATE_VIRAL;
+                    double dbgViralMult = anyActive ? viralRecoveryMult
+                            : ColdSweatCompat.getRecoveryMultiplier(
+                                    player, DiseaseRegistry.GROUP_VIRAL, viralEnvAccumulatedThisTick);
                     viralLines = buildViralDebugLines(player, state, isDamp, viralEnvAccumulatedThisTick,
-                            viralRecoveryMult);
+                            dbgViralMult);
                 }
                 if (bacterialDbg) {
                     mask |= DebugOverlayPacket.UPDATE_BACTERIAL;
-                    bacterialLines = buildBacterialDebugLines(player, state, bacterialRecoveryMult);
+                    double dbgBacterialMult = anyActive ? bacterialRecoveryMult
+                            : ColdSweatCompat.getRecoveryMultiplier(player, DiseaseRegistry.GROUP_BACTERIAL, false);
+                    bacterialLines = buildBacterialDebugLines(player, state, dbgBacterialMult);
                 }
                 NetworkHandler.sendDebugOverlay(player, mask, viralLines, bacterialLines);
             }

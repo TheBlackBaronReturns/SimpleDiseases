@@ -14,12 +14,13 @@ public final class DiseaseWorldTempHelper {
 
     private DiseaseWorldTempHelper() {}
 
-    /** Net WORLD offset from active disease fever (+) and septic shock (−). */
-    public static double perceptionOffset(LivingEntity entity) {
+    /** Net WORLD offset from active disease fever (+) and septic shock (−). {@code worldTemp} is the
+     *  caller's already-fetched {@code Temperature.get(entity, WORLD)} for this tick — reused here
+     *  instead of querying Cold Sweat a second time for the same value. */
+    public static double perceptionOffset(LivingEntity entity, double worldTemp) {
         double fever = FeverWorldTempModifier.maxFeverOffset(entity);
         if (fever <= 0.0 && maxShockOffset(entity) <= 0.0) return 0.0;
-        double modified = Temperature.get(entity, Temperature.Trait.WORLD);
-        double rawApprox = modified - fever;
+        double rawApprox = worldTemp - fever;
         double shock = effectiveShockPenalty(entity, rawApprox);
         return fever - shock;
     }

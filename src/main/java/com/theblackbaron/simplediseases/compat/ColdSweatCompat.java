@@ -7,7 +7,6 @@ import com.momosoftworks.coldsweat.api.util.placement.Matcher;
 import com.momosoftworks.coldsweat.api.util.placement.Placement;
 import com.momosoftworks.coldsweat.util.world.WorldHelper;
 import com.theblackbaron.simplediseases.SimpleDiseases;
-import com.theblackbaron.simplediseases.status.DiseaseEffects;
 import com.theblackbaron.simplediseases.status.DiseaseMobEffect;
 import com.theblackbaron.simplediseases.status.def.DiseaseRegistry;
 import net.minecraft.resources.ResourceLocation;
@@ -78,18 +77,7 @@ public class ColdSweatCompat {
 
     public static boolean hasHotWaterskin(ServerPlayer player) {
         if (!LOADED) return false;
-        resolveItems();
-        Item filled = filledWaterskinItem;
-        if (filled == null) return false;
-        for (ItemStack stack : player.getInventory().items) {
-            if (isHotWaterskin(stack, filled)) return true;
-        }
-        return isHotWaterskin(player.getOffhandItem(), filled);
-    }
-
-    private static boolean isHotWaterskin(ItemStack stack, Item filledWaterskin) {
-        if (!stack.is(filledWaterskin)) return false;
-        return getWaterskinTemp(stack) > 0.0;
+        return maxHotWaterskinTemp(player) > 0.0;
     }
 
     private static double getWaterskinTemp(ItemStack stack) {
@@ -102,6 +90,13 @@ public class ColdSweatCompat {
 
     public static double getHotWaterskinTemp(ServerPlayer player) {
         if (!LOADED) return 0.0;
+        return maxHotWaterskinTemp(player);
+    }
+
+    /** Single inventory+offhand pass backing both {@link #hasHotWaterskin} and {@link #getHotWaterskinTemp} —
+     *  callers that need both (recovery bonus) should use this directly instead of calling both, which
+     *  would scan the inventory twice. */
+    private static double maxHotWaterskinTemp(ServerPlayer player) {
         resolveItems();
         Item filled = filledWaterskinItem;
         if (filled == null) return 0.0;
@@ -112,8 +107,12 @@ public class ColdSweatCompat {
                 if (temp > max) max = temp;
             }
         }
-        double offhand = getWaterskinTemp(player.getOffhandItem());
-        return Math.max(max, player.getOffhandItem().is(filled) ? offhand : 0.0);
+        ItemStack offhand = player.getOffhandItem();
+        if (offhand.is(filled)) {
+            double temp = getWaterskinTemp(offhand);
+            if (temp > max) max = temp;
+        }
+        return max;
     }
 
     public static int goatFurArmorPieces(ServerPlayer player) {
@@ -159,7 +158,7 @@ public class ColdSweatCompat {
     public static double getObjectiveRecoveryWarmth(ServerPlayer player) {
         if (LOADED) {
             double world = Temperature.get(player, Temperature.Trait.WORLD);
-            world -= DiseaseWorldTempHelper.perceptionOffset(player);
+            world -= DiseaseWorldTempHelper.perceptionOffset(player, world);
             world += getInsulationWarmthBonus(player);
             world += getHotWaterskinRecoveryBonus(player);
             return world;
@@ -188,11 +187,9 @@ public class ColdSweatCompat {
     }
 
     private static double getHotWaterskinRecoveryBonus(ServerPlayer player) {
-        if (!hasHotWaterskin(player)) return 0.0;
-        if (LOADED) {
-            return Math.min(WATERSKIN_DRY_HEAT, getHotWaterskinTemp(player) * 0.01);
-        }
-        return WATERSKIN_DRY_HEAT;
+        if (!LOADED) return 0.0;
+        double temp = maxHotWaterskinTemp(player);
+        return temp > 0.0 ? Math.min(WATERSKIN_DRY_HEAT, temp * 0.01) : 0.0;
     }
 
     /**
@@ -248,8 +245,14 @@ public class ColdSweatCompat {
      */
     public static void syncDiseaseWorldModifiers(ServerPlayer player) {
         if (!LOADED) return;
-        boolean hasFever = FeverWorldTempModifier.maxFeverOffset(player) > 0.0;
-        boolean inShock = DiseaseEffects.hasSepticShock(player);
+        boolean hasFever = false;
+        boolean inShock = false;
+        for (MobEffectInstance inst : player.getActiveEffects()) {
+            if (inst.getEffect() instanceof DiseaseMobEffect dme) {
+                if (dme.getFeverOffset() > 0.0) hasFever = true;
+                if (dme.getShockOffset() > 0.0) inShock = true;
+            }
+        }
         boolean hasFeverMod = Temperature.hasModifier(player, Temperature.Trait.WORLD, FeverWorldTempModifier.class);
         boolean hasShockMod = Temperature.hasModifier(player, Temperature.Trait.WORLD, SepticShockTempModifier.class);
 
