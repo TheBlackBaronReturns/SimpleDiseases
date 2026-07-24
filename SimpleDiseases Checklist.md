@@ -44,13 +44,17 @@ Localize all disease attribute debuffs based on the area of infection rather tha
 * Bones: Toughness, Knockback Resistance
 * Brain: Experience Gain, Max Mana (Iron Spells Compat)
 
-Why does Cellulitis get the confusion symptom in its tooltip?
+Currently, when a player has multiple diseases on simultaneously, all of them provide particle effects on the player simultaneously, and presumably if
+in theory a player had two diseases that are both contagious to players/villagers in the way that colds/flus/rsv are now, both would be contagious at
+once. A seniority where only the most severely feverish disease is actively contagious/emits player particles should be in effect (when both are equally
+feverish it should be based on pain and then occurence [latest should take precedence]). Symptoms should no longer be frozen of the source disease when
+a complication begins accumulation.
 
 ~~Rebalance bleeding damage as it is way too strong currently~~ — Resolved: bleeding/internal bleeding/blood loss mechanic removed entirely; blood visuals now driven by flesh wounds
 
 Fix bleeding particle effect consistency (align with majrusz)
 
-Fix chance of cellulitis being too low as it is currently
+Fix chance of cellulitis possibly being too low as it is currently
 
 Check if immunity impacts worsening chance
 
