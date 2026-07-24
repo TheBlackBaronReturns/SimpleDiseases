@@ -261,13 +261,18 @@ public class PlayerDiseaseState {
         return canStartNewDisease();
     }
 
-    /** The disease occupying composite exclusion {@code group} that's currently in progress (pre-latch
-     *  or latched), or null. Scoped to one organ+pathogen slot rather than "any disease" — under the
-     *  composite exclusion model, multiple slots can be simultaneously active for one player. */
+    /** The primary (viral/bacterial) disease occupying composite exclusion {@code group} that's
+     *  currently in progress (pre-latch or latched), or null. Scoped to one organ+pathogen slot rather
+     *  than "any disease" — under the composite exclusion model, multiple slots can be simultaneously
+     *  active for one player. Complications are deliberately excluded here: they share their source's
+     *  exclusion group by design (see {@link DiseaseDef#exclusionGroup()}), but they track their source
+     *  via {@link SourceComponent} rather than occupying the slot themselves — matching one would steal
+     *  the slot's environmental accumulation/incubation routing away from the actual primary disease. */
     public ResourceLocation activeInGroup(String group) {
         for (DiseaseInstance inst : diseases.values()) {
             DiseaseDef def = DiseaseRegistry.get(inst.diseaseId());
-            if (def != null && group.equals(def.exclusionGroup()) && progress(def.id()) > 0.0) return def.id();
+            if (def != null && !(def instanceof ComplicationDiseaseDef)
+                    && group.equals(def.exclusionGroup()) && progress(def.id()) > 0.0) return def.id();
         }
         return null;
     }
